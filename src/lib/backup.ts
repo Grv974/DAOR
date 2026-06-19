@@ -1,5 +1,5 @@
 import { db } from '@/db/db';
-import type { FileBlob, Page } from '@/types';
+import type { Database, FileBlob, Page, Row } from '@/types';
 import { tiptapToMarkdown } from '@/lib/markdown';
 import { createZip } from '@/lib/zip';
 
@@ -18,6 +18,8 @@ interface BackupFile {
   exportedAt: string;
   pages: Page[];
   files: SerializedFile[];
+  databases?: Database[];
+  rows?: Row[];
 }
 
 export function downloadBlob(blob: Blob, filename: string): void {
@@ -51,6 +53,8 @@ function base64ToBlob(base64: string, mime: string): Blob {
 /** Full workspace backup as a single JSON file (pages + embedded files). */
 export async function exportJSON(): Promise<void> {
   const pages = await db.pages.toArray();
+  const databases = await db.databases.toArray();
+  const rows = await db.rows.toArray();
   const fileRecords = await db.files.toArray();
   const files: SerializedFile[] = await Promise.all(
     fileRecords.map(async (f) => ({
@@ -66,6 +70,8 @@ export async function exportJSON(): Promise<void> {
     exportedAt: new Date().toISOString(),
     pages,
     files,
+    databases,
+    rows,
   };
   downloadBlob(
     new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }),
@@ -79,7 +85,7 @@ export async function importJSON(text: string): Promise<number> {
   if (!data.pages || !Array.isArray(data.pages)) {
     throw new Error('Fichier de sauvegarde invalide.');
   }
-  await db.transaction('rw', db.pages, db.files, async () => {
+  await db.transaction('rw', db.pages, db.files, db.databases, db.rows, async () => {
     await db.pages.bulkPut(data.pages);
     if (Array.isArray(data.files)) {
       const restored: FileBlob[] = data.files.map((f) => ({
@@ -92,6 +98,8 @@ export async function importJSON(text: string): Promise<number> {
       }));
       await db.files.bulkPut(restored);
     }
+    if (Array.isArray(data.databases)) await db.databases.bulkPut(data.databases);
+    if (Array.isArray(data.rows)) await db.rows.bulkPut(data.rows);
   });
   return data.pages.length;
 }

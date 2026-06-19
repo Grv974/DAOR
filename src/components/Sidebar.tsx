@@ -7,9 +7,11 @@ import {
   Plus,
   Search,
   Star,
+  Table2,
   Upload,
 } from 'lucide-react';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
+import { useDatabaseStore } from '@/store/useDatabaseStore';
 import { useUIStore } from '@/store/useUIStore';
 import { PageTreeItem } from './PageTreeItem';
 import { exportJSON, exportMarkdownZip, importJSON } from '@/lib/backup';
@@ -21,12 +23,20 @@ export function Sidebar() {
   const rootOrder = useWorkspaceStore((s) => s.rootOrder);
   const createPage = useWorkspaceStore((s) => s.createPage);
   const init = useWorkspaceStore((s) => s.init);
+  const createDatabase = useDatabaseStore((s) => s.createDatabase);
+  const initDatabases = useDatabaseStore((s) => s.init);
   const { setSidebarOpen, setSearchOpen } = useUIStore();
 
   const favorites = Object.values(pages).filter((p) => p.favorite && !p.trashed);
 
   const newPage = async () => {
     const id = await createPage(null);
+    navigate(`/page/${id}`);
+  };
+
+  const newDatabase = async () => {
+    const id = await createPage(null, { type: 'database', icon: '🗃️', title: 'Base de données' });
+    await createDatabase(id);
     navigate(`/page/${id}`);
   };
 
@@ -37,6 +47,7 @@ export function Sidebar() {
       const text = await file.text();
       const count = await importJSON(text);
       await init();
+      await initDatabases();
       alert(`${count} page(s) importée(s).`);
     } catch (err) {
       alert(`Échec de l'import : ${(err as Error).message}`);
@@ -105,6 +116,13 @@ export function Sidebar() {
           className="mt-1 flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-notion-muted hover:bg-notion-hover dark:hover:bg-notion-hover-dark"
         >
           <Plus size={16} /> Nouvelle page
+        </button>
+        <button
+          type="button"
+          onClick={newDatabase}
+          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-notion-muted hover:bg-notion-hover dark:hover:bg-notion-hover-dark"
+        >
+          <Table2 size={16} /> Nouvelle base
         </button>
       </div>
 

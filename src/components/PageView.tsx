@@ -3,6 +3,7 @@ import { useCallback } from 'react';
 import { Smile, Star } from 'lucide-react';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { Editor } from '@/editor/Editor';
+import { DatabaseView } from '@/components/database/DatabaseView';
 
 const QUICK_EMOJIS = ['📄', '📝', '📌', '💡', '🚀', '📚', '✅', '🎯', '🗂️', '⭐'];
 
@@ -97,8 +98,14 @@ export function PageView() {
         />
       </div>
 
-      {/* Remount the editor per page so content swaps cleanly. */}
-      <Editor key={id} content={page.content} onChange={onChange} />
+      {page.type === 'database' ? (
+        <div className="mt-6">
+          <DatabaseView pageId={id} />
+        </div>
+      ) : (
+        /* Remount the editor per page so content swaps cleanly. */
+        <Editor key={id} content={page.content} onChange={onChange} />
+      )}
     </div>
   );
 }

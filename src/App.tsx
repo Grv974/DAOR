@@ -5,6 +5,7 @@ import { Topbar } from '@/components/Topbar';
 import { PageView } from '@/components/PageView';
 import { CommandPalette } from '@/components/CommandPalette';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
+import { useDatabaseStore } from '@/store/useDatabaseStore';
 import { useUIStore } from '@/store/useUIStore';
 import { useParams } from 'react-router-dom';
 
@@ -52,13 +53,15 @@ function PageRoute() {
 
 export default function App() {
   const init = useWorkspaceStore((s) => s.init);
+  const initDatabases = useDatabaseStore((s) => s.init);
   const loaded = useWorkspaceStore((s) => s.loaded);
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
   const setSearchOpen = useUIStore((s) => s.setSearchOpen);
 
   useEffect(() => {
     void init();
-  }, [init]);
+    void initDatabases();
+  }, [init, initDatabases]);
 
   // Global Ctrl/Cmd+K to open search.
   useEffect(() => {
