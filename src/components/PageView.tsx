@@ -1,9 +1,17 @@
 import { useNavigate, useParams } from 'react-router-dom';
-import { useCallback } from 'react';
+import { lazy, Suspense, useCallback } from 'react';
 import { Smile, Star } from 'lucide-react';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
-import { Editor } from '@/editor/Editor';
-import { DatabaseView } from '@/components/database/DatabaseView';
+
+// Lazy-loaded to keep Tiptap and the database views out of the initial bundle.
+const Editor = lazy(() => import('@/editor/Editor').then((m) => ({ default: m.Editor })));
+const DatabaseView = lazy(() =>
+  import('@/components/database/DatabaseView').then((m) => ({ default: m.DatabaseView })),
+);
+
+function ViewFallback() {
+  return <div className="mx-auto w-full max-w-3xl px-6 py-4 text-sm text-notion-muted">Chargement…</div>;
+}
 
 const QUICK_EMOJIS = ['📄', '📝', '📌', '💡', '🚀', '📚', '✅', '🎯', '🗂️', '⭐'];
 
@@ -98,14 +106,16 @@ export function PageView() {
         />
       </div>
 
-      {page.type === 'database' ? (
-        <div className="mt-6">
-          <DatabaseView pageId={id} />
-        </div>
-      ) : (
-        /* Remount the editor per page so content swaps cleanly. */
-        <Editor key={id} content={page.content} onChange={onChange} />
-      )}
+      <Suspense fallback={<ViewFallback />}>
+        {page.type === 'database' ? (
+          <div className="mt-6">
+            <DatabaseView pageId={id} />
+          </div>
+        ) : (
+          /* Remount the editor per page so content swaps cleanly. */
+          <Editor key={id} content={page.content} onChange={onChange} />
+        )}
+      </Suspense>
     </div>
   );
 }

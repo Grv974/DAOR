@@ -1,4 +1,4 @@
-import { Menu, Moon, Search, Sun } from 'lucide-react';
+import { Moon, Search, Sun } from 'lucide-react';
 import { useUIStore } from '@/store/useUIStore';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 
@@ -7,7 +7,7 @@ interface TopbarProps {
 }
 
 export function Topbar({ pageId }: TopbarProps) {
-  const { theme, toggleTheme, sidebarOpen, setSidebarOpen, setSearchOpen } = useUIStore();
+  const { theme, toggleTheme, sidebarOpen, setSearchOpen } = useUIStore();
   const pages = useWorkspaceStore((s) => s.pages);
 
   // Build a breadcrumb trail from the current page up to the root.
@@ -19,17 +19,11 @@ export function Topbar({ pageId }: TopbarProps) {
   }
 
   return (
-    <header className="flex h-11 items-center gap-2 border-b border-notion-border px-3 dark:border-notion-border-dark">
-      {!sidebarOpen && (
-        <button
-          type="button"
-          onClick={() => setSidebarOpen(true)}
-          className="rounded p-1 hover:bg-notion-hover dark:hover:bg-notion-hover-dark"
-          title="Afficher le menu"
-        >
-          <Menu size={18} />
-        </button>
-      )}
+    <header
+      className={`flex h-11 items-center gap-2 border-b border-notion-border px-3 dark:border-notion-border-dark ${
+        sidebarOpen ? '' : 'pl-12'
+      }`}
+    >
       <nav className="flex min-w-0 flex-1 items-center gap-1 text-sm text-notion-muted">
         {trail.map((item, i) => (
           <span key={item.id} className="flex items-center gap-1 truncate">

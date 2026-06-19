@@ -4,10 +4,12 @@ import {
   ChevronsLeft,
   Download,
   FileDown,
+  HelpCircle,
   Plus,
   Search,
   Star,
   Table2,
+  Trash2,
   Upload,
 } from 'lucide-react';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
@@ -15,6 +17,7 @@ import { useDatabaseStore } from '@/store/useDatabaseStore';
 import { useUIStore } from '@/store/useUIStore';
 import { PageTreeItem } from './PageTreeItem';
 import { exportJSON, exportMarkdownZip, importJSON } from '@/lib/backup';
+import { markdownToTiptap } from '@/lib/markdownImport';
 import { db } from '@/db/db';
 import { searchIndex } from '@/lib/searchIndex';
 
@@ -27,7 +30,7 @@ export function Sidebar() {
   const init = useWorkspaceStore((s) => s.init);
   const createDatabase = useDatabaseStore((s) => s.createDatabase);
   const initDatabases = useDatabaseStore((s) => s.init);
-  const { setSidebarOpen, setSearchOpen } = useUIStore();
+  const { setSidebarOpen, setSearchOpen, setHelpOpen, setTrashOpen } = useUIStore();
 
   const favorites = Object.values(pages).filter((p) => p.favorite && !p.trashed);
 
@@ -42,22 +45,33 @@ export function Sidebar() {
     navigate(`/page/${id}`);
   };
 
+  const rebuildIndex = async () => {
+    const allRows = await db.rows.toArray();
+    searchIndex.buildAll(
+      Object.values(useWorkspaceStore.getState().pages),
+      useDatabaseStore.getState().databases,
+      allRows,
+    );
+  };
+
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
       const text = await file.text();
-      const count = await importJSON(text);
-      await init();
-      await initDatabases();
-      // Rebuild the search index from the freshly imported data.
-      const allRows = await db.rows.toArray();
-      searchIndex.buildAll(
-        Object.values(useWorkspaceStore.getState().pages),
-        useDatabaseStore.getState().databases,
-        allRows,
-      );
-      alert(`${count} page(s) importée(s).`);
+      if (file.name.toLowerCase().endsWith('.md')) {
+        // Markdown → a new top-level page.
+        const { title, doc } = markdownToTiptap(text);
+        const fallback = file.name.replace(/\.md$/i, '');
+        const id = await createPage(null, { title: title || fallback, content: doc });
+        navigate(`/page/${id}`);
+      } else {
+        const count = await importJSON(text);
+        await init();
+        await initDatabases();
+        await rebuildIndex();
+        alert(`${count} page(s) importée(s).`);
+      }
     } catch (err) {
       alert(`Échec de l'import : ${(err as Error).message}`);
     } finally {
@@ -136,6 +150,24 @@ export function Sidebar() {
       </div>
 
       <div className="border-t border-notion-border p-2 dark:border-notion-border-dark">
+        <div className="mb-1 grid grid-cols-2 gap-1">
+          <button
+            type="button"
+            onClick={() => setTrashOpen(true)}
+            className="flex items-center justify-center gap-1.5 rounded px-1 py-1.5 text-xs text-notion-muted hover:bg-notion-hover dark:hover:bg-notion-hover-dark"
+            title="Corbeille"
+          >
+            <Trash2 size={15} /> Corbeille
+          </button>
+          <button
+            type="button"
+            onClick={() => setHelpOpen(true)}
+            className="flex items-center justify-center gap-1.5 rounded px-1 py-1.5 text-xs text-notion-muted hover:bg-notion-hover dark:hover:bg-notion-hover-dark"
+            title="Guide des fonctionnalités"
+          >
+            <HelpCircle size={15} /> Guide
+          </button>
+        </div>
         <div className="grid grid-cols-3 gap-1">
           <button
             type="button"
@@ -157,7 +189,7 @@ export function Sidebar() {
             type="button"
             onClick={() => fileInput.current?.click()}
             className="flex flex-col items-center gap-1 rounded px-1 py-2 text-[11px] text-notion-muted hover:bg-notion-hover dark:hover:bg-notion-hover-dark"
-            title="Importer une sauvegarde JSON"
+            title="Importer une sauvegarde JSON ou un fichier Markdown"
           >
             <Upload size={16} /> Import
           </button>
@@ -165,7 +197,7 @@ export function Sidebar() {
         <input
           ref={fileInput}
           type="file"
-          accept="application/json"
+          accept="application/json,.json,.md,text/markdown"
           className="hidden"
           onChange={handleImport}
         />

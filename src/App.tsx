@@ -1,9 +1,12 @@
 import { useEffect } from 'react';
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { PanelLeft } from 'lucide-react';
 import { Sidebar } from '@/components/Sidebar';
 import { Topbar } from '@/components/Topbar';
 import { PageView } from '@/components/PageView';
 import { CommandPalette } from '@/components/CommandPalette';
+import { HelpGuide } from '@/components/HelpGuide';
+import { TrashModal } from '@/components/TrashModal';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useDatabaseStore } from '@/store/useDatabaseStore';
 import { useUIStore } from '@/store/useUIStore';
@@ -58,6 +61,7 @@ export default function App() {
   const initDatabases = useDatabaseStore((s) => s.init);
   const loaded = useWorkspaceStore((s) => s.loaded);
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
+  const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
   const setSearchOpen = useUIStore((s) => s.setSearchOpen);
 
   useEffect(() => {
@@ -95,6 +99,19 @@ export default function App() {
   return (
     <div className="flex h-full bg-notion-bg text-notion-text dark:bg-notion-bg-dark dark:text-notion-text-dark">
       {sidebarOpen && <Sidebar />}
+
+      {/* Always-available control to bring the sidebar back when collapsed. */}
+      {!sidebarOpen && (
+        <button
+          type="button"
+          onClick={() => setSidebarOpen(true)}
+          className="fixed left-2 top-2 z-40 rounded-md border border-notion-border bg-white/90 p-1.5 shadow-sm backdrop-blur hover:bg-notion-hover dark:border-notion-border-dark dark:bg-[#2a2a2a]/90 dark:hover:bg-notion-hover-dark"
+          title="Afficher le menu latéral"
+        >
+          <PanelLeft size={18} />
+        </button>
+      )}
+
       <div className="flex min-w-0 flex-1 flex-col">
         <Routes>
           <Route path="/" element={<Home />} />
@@ -102,7 +119,10 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
+
       <CommandPalette />
+      <HelpGuide />
+      <TrashModal />
     </div>
   );
 }
