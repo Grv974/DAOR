@@ -1,9 +1,10 @@
 import { db } from '@/db/db';
 import type { Database, FileBlob, Page, Row } from '@/types';
+import type { Commitment, Entity, Interaction, Relation } from '@/types/aura';
 import { tiptapToMarkdown } from '@/lib/markdown';
 import { createZip } from '@/lib/zip';
 
-const BACKUP_VERSION = 1;
+const BACKUP_VERSION = 2;
 
 interface SerializedFile {
   id: string;
@@ -20,6 +21,11 @@ interface BackupFile {
   files: SerializedFile[];
   databases?: Database[];
   rows?: Row[];
+  // AURA layer.
+  entities?: Entity[];
+  relations?: Relation[];
+  commitments?: Commitment[];
+  interactions?: Interaction[];
 }
 
 export function downloadBlob(blob: Blob, filename: string): void {
@@ -55,6 +61,12 @@ export async function exportJSON(): Promise<void> {
   const pages = await db.pages.toArray();
   const databases = await db.databases.toArray();
   const rows = await db.rows.toArray();
+  const [entities, relations, commitments, interactions] = await Promise.all([
+    db.entities.toArray(),
+    db.relations.toArray(),
+    db.commitments.toArray(),
+    db.interactions.toArray(),
+  ]);
   const fileRecords = await db.files.toArray();
   const files: SerializedFile[] = await Promise.all(
     fileRecords.map(async (f) => ({
@@ -72,6 +84,10 @@ export async function exportJSON(): Promise<void> {
     files,
     databases,
     rows,
+    entities,
+    relations,
+    commitments,
+    interactions,
   };
   downloadBlob(
     new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }),
@@ -85,22 +101,30 @@ export async function importJSON(text: string): Promise<number> {
   if (!data.pages || !Array.isArray(data.pages)) {
     throw new Error('Fichier de sauvegarde invalide.');
   }
-  await db.transaction('rw', db.pages, db.files, db.databases, db.rows, async () => {
-    await db.pages.bulkPut(data.pages);
-    if (Array.isArray(data.files)) {
-      const restored: FileBlob[] = data.files.map((f) => ({
-        id: f.id,
-        name: f.name,
-        mime: f.mime,
-        size: f.size,
-        blob: base64ToBlob(f.dataBase64, f.mime),
-        createdAt: Date.now(),
-      }));
-      await db.files.bulkPut(restored);
-    }
-    if (Array.isArray(data.databases)) await db.databases.bulkPut(data.databases);
-    if (Array.isArray(data.rows)) await db.rows.bulkPut(data.rows);
-  });
+  await db.transaction(
+    'rw',
+    [db.pages, db.files, db.databases, db.rows, db.entities, db.relations, db.commitments, db.interactions],
+    async () => {
+      await db.pages.bulkPut(data.pages);
+      if (Array.isArray(data.files)) {
+        const restored: FileBlob[] = data.files.map((f) => ({
+          id: f.id,
+          name: f.name,
+          mime: f.mime,
+          size: f.size,
+          blob: base64ToBlob(f.dataBase64, f.mime),
+          createdAt: Date.now(),
+        }));
+        await db.files.bulkPut(restored);
+      }
+      if (Array.isArray(data.databases)) await db.databases.bulkPut(data.databases);
+      if (Array.isArray(data.rows)) await db.rows.bulkPut(data.rows);
+      if (Array.isArray(data.entities)) await db.entities.bulkPut(data.entities);
+      if (Array.isArray(data.relations)) await db.relations.bulkPut(data.relations);
+      if (Array.isArray(data.commitments)) await db.commitments.bulkPut(data.commitments);
+      if (Array.isArray(data.interactions)) await db.interactions.bulkPut(data.interactions);
+    },
+  );
   return data.pages.length;
 }
 

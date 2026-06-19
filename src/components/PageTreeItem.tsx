@@ -82,6 +82,7 @@ export function PageTreeItem({ pageId, depth }: PageTreeItemProps) {
         onDragStart={(e) => {
           draggedId = pageId;
           e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', pageId);
           e.stopPropagation();
         }}
         onDragEnd={() => {
