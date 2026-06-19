@@ -16,6 +16,7 @@ import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useDatabaseStore } from '@/store/useDatabaseStore';
 import { useUIStore } from '@/store/useUIStore';
 import { PageTreeItem } from './PageTreeItem';
+import { ModuleNav } from '@/components/aura/ModuleNav';
 import { exportJSON, exportMarkdownZip, importJSON } from '@/lib/backup';
 import { markdownToTiptap } from '@/lib/markdownImport';
 import { db } from '@/db/db';
@@ -102,6 +103,10 @@ export function Sidebar() {
           <Search size={16} /> Rechercher
         </button>
       </div>
+
+      <ModuleNav />
+
+      <div className="mx-2 mb-1 border-t border-notion-border dark:border-notion-border-dark" />
 
       <div className="flex-1 overflow-y-auto px-2 pb-4">
         {favorites.length > 0 && (

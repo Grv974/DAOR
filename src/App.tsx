@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { lazy, Suspense, useEffect } from 'react';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { PanelLeft } from 'lucide-react';
 import { Sidebar } from '@/components/Sidebar';
 import { Topbar } from '@/components/Topbar';
@@ -9,39 +9,25 @@ import { HelpGuide } from '@/components/HelpGuide';
 import { TrashModal } from '@/components/TrashModal';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useDatabaseStore } from '@/store/useDatabaseStore';
+import { useEntityStore } from '@/store/useEntityStore';
 import { useUIStore } from '@/store/useUIStore';
 import { useParams } from 'react-router-dom';
 import { db } from '@/db/db';
 import { searchIndex } from '@/lib/searchIndex';
 
-function Home() {
-  const navigate = useNavigate();
-  const rootOrder = useWorkspaceStore((s) => s.rootOrder);
-  const createPage = useWorkspaceStore((s) => s.createPage);
+// AURA modules — lazy-loaded (code-splitting per the spec's perf targets).
+const DashboardModule = lazy(() => import('@/modules/DashboardModule').then((m) => ({ default: m.DashboardModule })));
+const ObjectivesModule = lazy(() => import('@/modules/ObjectivesModule').then((m) => ({ default: m.ObjectivesModule })));
+const CrmModule = lazy(() => import('@/modules/CrmModule').then((m) => ({ default: m.CrmModule })));
+const OpportunitiesModule = lazy(() =>
+  import('@/modules/OpportunitiesModule').then((m) => ({ default: m.OpportunitiesModule })),
+);
+const JournalModule = lazy(() => import('@/modules/JournalModule').then((m) => ({ default: m.JournalModule })));
+const GraphModule = lazy(() => import('@/modules/GraphModule').then((m) => ({ default: m.GraphModule })));
+const ProjectsModule = lazy(() => import('@/modules/ProjectsModule').then((m) => ({ default: m.ProjectsModule })));
 
-  // If pages exist, open the first one; otherwise show a welcome screen.
-  useEffect(() => {
-    if (rootOrder.length > 0) navigate(`/page/${rootOrder[0]}`, { replace: true });
-  }, [rootOrder, navigate]);
-
-  if (rootOrder.length > 0) return null;
-
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
-      <h1 className="text-2xl font-bold">Bienvenue dans DAOR</h1>
-      <p className="max-w-sm text-notion-muted">
-        Un espace de travail façon Notion, 100 % local et hors ligne. Vos données restent dans ce
-        navigateur.
-      </p>
-      <button
-        type="button"
-        onClick={async () => navigate(`/page/${await createPage(null)}`)}
-        className="rounded-md bg-notion-accent px-4 py-2 text-sm font-medium text-white"
-      >
-        Créer ma première page
-      </button>
-    </div>
-  );
+function ModuleFallback() {
+  return <div className="flex h-full items-center justify-center text-sm text-notion-muted">Chargement…</div>;
 }
 
 function PageRoute() {
@@ -59,6 +45,7 @@ function PageRoute() {
 export default function App() {
   const init = useWorkspaceStore((s) => s.init);
   const initDatabases = useDatabaseStore((s) => s.init);
+  const initEntities = useEntityStore((s) => s.init);
   const loaded = useWorkspaceStore((s) => s.loaded);
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
   const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
@@ -66,7 +53,7 @@ export default function App() {
 
   useEffect(() => {
     void (async () => {
-      await Promise.all([init(), initDatabases()]);
+      await Promise.all([init(), initDatabases(), initEntities()]);
       // Build the search index once data is loaded; it stays in sync
       // incrementally afterwards via store mutations.
       const allRows = await db.rows.toArray();
@@ -76,7 +63,7 @@ export default function App() {
         allRows,
       );
     })();
-  }, [init, initDatabases]);
+  }, [init, initDatabases, initEntities]);
 
   // Global Ctrl/Cmd+K to open search.
   useEffect(() => {
@@ -113,11 +100,20 @@ export default function App() {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/page/:id" element={<PageRoute />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <Suspense fallback={<ModuleFallback />}>
+          <Routes>
+            <Route path="/" element={<Navigate to="/m/dashboard" replace />} />
+            <Route path="/m/dashboard" element={<DashboardModule />} />
+            <Route path="/m/objectives" element={<ObjectivesModule />} />
+            <Route path="/m/projects" element={<ProjectsModule />} />
+            <Route path="/m/crm" element={<CrmModule />} />
+            <Route path="/m/opportunities" element={<OpportunitiesModule />} />
+            <Route path="/m/journal" element={<JournalModule />} />
+            <Route path="/m/graph" element={<GraphModule />} />
+            <Route path="/page/:id" element={<PageRoute />} />
+            <Route path="*" element={<Navigate to="/m/dashboard" replace />} />
+          </Routes>
+        </Suspense>
       </div>
 
       <CommandPalette />
