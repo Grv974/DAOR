@@ -75,10 +75,49 @@ export interface PropertyDef {
 
 export type ViewType = 'table' | 'kanban' | 'gallery' | 'calendar';
 
+export type FilterOp =
+  | 'contains'
+  | 'notContains'
+  | 'equals'
+  | 'notEquals'
+  | 'gt'
+  | 'lt'
+  | 'before'
+  | 'after'
+  | 'isEmpty'
+  | 'isNotEmpty'
+  | 'checked'
+  | 'unchecked';
+
+export interface Filter {
+  id: string;
+  propId: string;
+  op: FilterOp;
+  value?: unknown;
+}
+
+export interface Sort {
+  propId: string;
+  direction: 'asc' | 'desc';
+}
+
 export interface DatabaseView {
   id: string;
   name: string;
   type: ViewType;
+  filters: Filter[];
+  sorts: Sort[];
+  /** Group-by property (table grouping & kanban columns). */
+  groupByPropId?: string | null;
+  /** Date property used by the calendar view. */
+  datePropId?: string | null;
+}
+
+export interface RowTemplate {
+  id: string;
+  name: string;
+  /** Pre-filled property values applied to new rows. */
+  values: Record<string, unknown>;
 }
 
 export interface Database {
@@ -86,6 +125,7 @@ export interface Database {
   id: string;
   properties: PropertyDef[];
   views: DatabaseView[];
+  templates: RowTemplate[];
   /** Property id used as the row title (first text property). */
   titlePropId: string;
 }

@@ -1,8 +1,24 @@
 import { create } from 'zustand';
 import { db } from '@/db/db';
-import type { Database, PropertyDef, PropertyType, Row, SelectOption } from '@/types';
+import type {
+  Database,
+  DatabaseView,
+  PropertyDef,
+  PropertyType,
+  Row,
+  RowTemplate,
+  SelectOption,
+  ViewType,
+} from '@/types';
 import { newId } from '@/lib/id';
 import { pickColor } from '@/lib/colors';
+
+const VIEW_LABELS: Record<ViewType, string> = {
+  table: 'Table',
+  kanban: 'Kanban',
+  gallery: 'Galerie',
+  calendar: 'Calendrier',
+};
 
 interface DatabaseState {
   databases: Record<string, Database>;
@@ -19,22 +35,59 @@ interface DatabaseState {
   deleteProperty: (dbId: string, propId: string) => void;
   addOption: (dbId: string, propId: string, name: string) => SelectOption | undefined;
 
-  addRow: (dbId: string) => Promise<void>;
+  addView: (dbId: string, type: ViewType) => string | undefined;
+  updateView: (dbId: string, viewId: string, patch: Partial<DatabaseView>) => void;
+  deleteView: (dbId: string, viewId: string) => void;
+
+  addTemplate: (dbId: string, name: string, values: Record<string, unknown>) => void;
+  updateTemplate: (dbId: string, templateId: string, values: Record<string, unknown>) => void;
+  deleteTemplate: (dbId: string, templateId: string) => void;
+
+  addRow: (dbId: string, templateId?: string) => Promise<void>;
   updateRowValue: (rowId: string, dbId: string, propId: string, value: unknown) => void;
   deleteRow: (rowId: string, dbId: string) => Promise<void>;
 
   deleteDatabase: (dbId: string) => Promise<void>;
 }
 
+function newView(type: ViewType, firstSelectProp?: string, firstDateProp?: string): DatabaseView {
+  return {
+    id: newId(),
+    name: VIEW_LABELS[type],
+    type,
+    filters: [],
+    sorts: [],
+    groupByPropId: type === 'kanban' ? (firstSelectProp ?? null) : null,
+    datePropId: type === 'calendar' ? (firstDateProp ?? null) : null,
+  };
+}
+
+/** Backfill fields added in later versions onto databases loaded from disk. */
+function normalizeDatabase(d: Database): Database {
+  return {
+    ...d,
+    templates: d.templates ?? [],
+    views: (d.views ?? []).map((v) => ({
+      ...v,
+      filters: v.filters ?? [],
+      sorts: v.sorts ?? [],
+      groupByPropId: v.groupByPropId ?? null,
+      datePropId: v.datePropId ?? null,
+    })),
+  };
+}
+
 function defaultSchema(id: string): Database {
   const titlePropId = newId();
+  const statusId = newId();
   return {
     id,
     titlePropId,
+    templates: [],
     properties: [
       { id: titlePropId, name: 'Nom', type: 'text' },
       {
-        id: newId(),
+        id: statusId,
         name: 'Statut',
         type: 'select',
         options: [
@@ -44,7 +97,7 @@ function defaultSchema(id: string): Database {
         ],
       },
     ],
-    views: [{ id: newId(), name: 'Table', type: 'table' }],
+    views: [newView('table')],
   };
 }
 
@@ -56,7 +109,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
   async init() {
     const all = await db.databases.toArray();
     const map: Record<string, Database> = {};
-    for (const d of all) map[d.id] = d;
+    for (const d of all) map[d.id] = normalizeDatabase(d);
     // Reset row caches so a fresh load (e.g. after import) re-reads from disk.
     set({ databases: map, rowsByDb: {}, loadedDbs: new Set() });
   },
@@ -139,13 +192,75 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
     return option;
   },
 
-  async addRow(dbId) {
+  addView(dbId, type) {
+    const dbRec = get().databases[dbId];
+    if (!dbRec) return undefined;
+    const firstSelect = dbRec.properties.find((p) => p.type === 'select')?.id;
+    const firstDate = dbRec.properties.find((p) => p.type === 'date')?.id;
+    const view = newView(type, firstSelect, firstDate);
+    const updated = { ...dbRec, views: [...dbRec.views, view] };
+    void db.databases.put(updated);
+    set((s) => ({ databases: { ...s.databases, [dbId]: updated } }));
+    return view.id;
+  },
+
+  updateView(dbId, viewId, patch) {
+    const dbRec = get().databases[dbId];
+    if (!dbRec) return;
+    const updated = {
+      ...dbRec,
+      views: dbRec.views.map((v) => (v.id === viewId ? { ...v, ...patch } : v)),
+    };
+    void db.databases.put(updated);
+    set((s) => ({ databases: { ...s.databases, [dbId]: updated } }));
+  },
+
+  deleteView(dbId, viewId) {
+    const dbRec = get().databases[dbId];
+    if (!dbRec || dbRec.views.length <= 1) return; // keep at least one view
+    const updated = { ...dbRec, views: dbRec.views.filter((v) => v.id !== viewId) };
+    void db.databases.put(updated);
+    set((s) => ({ databases: { ...s.databases, [dbId]: updated } }));
+  },
+
+  addTemplate(dbId, name, values) {
+    const dbRec = get().databases[dbId];
+    if (!dbRec) return;
+    const template: RowTemplate = { id: newId(), name, values };
+    const updated = { ...dbRec, templates: [...dbRec.templates, template] };
+    void db.databases.put(updated);
+    set((s) => ({ databases: { ...s.databases, [dbId]: updated } }));
+  },
+
+  updateTemplate(dbId, templateId, values) {
+    const dbRec = get().databases[dbId];
+    if (!dbRec) return;
+    const updated = {
+      ...dbRec,
+      templates: dbRec.templates.map((t) => (t.id === templateId ? { ...t, values } : t)),
+    };
+    void db.databases.put(updated);
+    set((s) => ({ databases: { ...s.databases, [dbId]: updated } }));
+  },
+
+  deleteTemplate(dbId, templateId) {
+    const dbRec = get().databases[dbId];
+    if (!dbRec) return;
+    const updated = { ...dbRec, templates: dbRec.templates.filter((t) => t.id !== templateId) };
+    void db.databases.put(updated);
+    set((s) => ({ databases: { ...s.databases, [dbId]: updated } }));
+  },
+
+  async addRow(dbId, templateId) {
     const now = Date.now();
     const existing = get().rowsByDb[dbId] ?? [];
+    const template = templateId
+      ? get().databases[dbId]?.templates.find((t) => t.id === templateId)
+      : undefined;
     const row: Row = {
       id: newId(),
       databaseId: dbId,
-      values: {},
+      values: template ? { ...template.values } : {},
       order: existing.length,
       createdAt: now,
       updatedAt: now,
