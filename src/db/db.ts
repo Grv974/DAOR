@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { FileBlob, Page } from '@/types';
+import type { Database, FileBlob, Page, Row } from '@/types';
 
 // Single IndexedDB database for the whole workspace.
 // Pages and file blobs live in separate stores so that large binary
@@ -7,6 +7,8 @@ import type { FileBlob, Page } from '@/types';
 export class DaorDB extends Dexie {
   pages!: Table<Page, string>;
   files!: Table<FileBlob, string>;
+  databases!: Table<Database, string>;
+  rows!: Table<Row, string>;
 
   constructor() {
     super('daor');
@@ -14,6 +16,13 @@ export class DaorDB extends Dexie {
       // Indexes chosen to support tree queries, favorites and trash views.
       pages: 'id, parentId, favorite, trashed, updatedAt',
       files: 'id, createdAt',
+    });
+    // v2 adds local databases (schema) and their rows.
+    this.version(2).stores({
+      pages: 'id, parentId, favorite, trashed, updatedAt',
+      files: 'id, createdAt',
+      databases: 'id',
+      rows: 'id, databaseId, order',
     });
   }
 }
