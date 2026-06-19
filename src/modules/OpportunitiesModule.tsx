@@ -1,37 +1,65 @@
 import { useMemo, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { useEntityStore } from '@/store/useEntityStore';
-import { OPP_STAGES, type OppStage } from '@/types/aura';
+import { OPP_STAGES, type Entity, type OppStage } from '@/types/aura';
+
+type ValueType = 'monetary' | 'career' | 'influence' | 'learning' | 'other';
+
+const VALUE_TYPES: { id: ValueType; label: string }[] = [
+  { id: 'monetary', label: 'Monétaire (€)' },
+  { id: 'career', label: 'Emploi / carrière' },
+  { id: 'influence', label: 'Influence / réseau' },
+  { id: 'learning', label: 'Apprentissage' },
+  { id: 'other', label: 'Autre' },
+];
+
+function valueLabel(o: Entity): string {
+  const type = (o.props.valueType as ValueType) ?? 'monetary';
+  if (type === 'monetary') return `${((o.props.value as number) || 0).toLocaleString('fr-FR')} €`;
+  const label = (o.props.valueLabel as string) || VALUE_TYPES.find((v) => v.id === type)?.label || '';
+  return label;
+}
 
 export function OpportunitiesModule() {
   const entities = useEntityStore((s) => s.entities);
+  const relations = useEntityStore((s) => s.relations);
   const createEntity = useEntityStore((s) => s.createEntity);
   const updateEntity = useEntityStore((s) => s.updateEntity);
   const updateProps = useEntityStore((s) => s.updateProps);
   const deleteEntity = useEntityStore((s) => s.deleteEntity);
+  const setParent = useEntityStore((s) => s.setParent);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+
   const opportunities = useMemo(
     () => Object.values(entities).filter((e) => e.type === 'opportunity' && !e.archived),
     [entities],
   );
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
+  // Entities an opportunity can be attached to (cascade).
+  const parents = useMemo(
+    () => Object.values(entities).filter((e) => ['vision', 'objective', 'project'].includes(e.type) && !e.archived),
+    [entities],
+  );
 
   const byStage = (stage: OppStage) => opportunities.filter((o) => (o.props.stage as OppStage) === stage);
 
   const metrics = useMemo(() => {
     const open = opportunities.filter((o) => !['won', 'lost'].includes(o.props.stage as string));
-    const weighted = open.reduce((s, o) => s + ((o.props.value as number) || 0) * (((o.props.probability as number) || 0) / 100), 0);
+    const weighted = open
+      .filter((o) => ((o.props.valueType as ValueType) ?? 'monetary') === 'monetary')
+      .reduce((s, o) => s + ((o.props.value as number) || 0) * (((o.props.probability as number) || 0) / 100), 0);
+    const nonMonetary = open.filter((o) => ((o.props.valueType as ValueType) ?? 'monetary') !== 'monetary').length;
     const won = byStage('won').length;
     const lost = byStage('lost').length;
     const conversion = won + lost > 0 ? Math.round((won / (won + lost)) * 100) : 0;
     const stagnant = open.filter((o) => Date.now() - o.updatedAt > 30 * 864e5).length;
-    return { weighted, conversion, stagnant, openCount: open.length };
+    return { weighted, nonMonetary, conversion, stagnant, openCount: open.length };
   }, [opportunities]);
 
   const create = async (stage: OppStage) => {
     const id = await createEntity('opportunity', {
       title: 'Nouvelle opportunité',
-      props: { stage, value: 0, probability: 50, category: 'Professionnel' },
+      props: { stage, valueType: 'monetary', value: 0, probability: 50, category: 'Professionnel' },
     });
     setSelected(id);
   };
@@ -42,6 +70,11 @@ export function OpportunitiesModule() {
   };
 
   const sel = selected ? entities[selected] : undefined;
+  const selParent = useMemo(() => {
+    if (!selected) return undefined;
+    const rel = relations.find((r) => r.type === 'parent' && r.source === selected);
+    return rel?.target;
+  }, [selected, relations]);
 
   return (
     <div className="flex h-full">
@@ -53,23 +86,24 @@ export function OpportunitiesModule() {
           </button>
         </div>
 
-        {/* Metrics */}
         <div className="flex flex-wrap gap-4 px-6 pb-3 text-sm">
-          <Metric label="Pipeline pondéré" value={`${Math.round(metrics.weighted).toLocaleString('fr-FR')} €`} />
+          <Metric label="Pipeline pondéré (€)" value={`${Math.round(metrics.weighted).toLocaleString('fr-FR')} €`} />
+          <Metric label="Non monétaires" value={String(metrics.nonMonetary)} />
           <Metric label="Taux de conversion" value={`${metrics.conversion} %`} />
           <Metric label="Ouvertes" value={String(metrics.openCount)} />
           <Metric label="Stagnantes (>30j)" value={String(metrics.stagnant)} warn={metrics.stagnant > 0} />
         </div>
 
-        {/* Kanban */}
         <div className="flex flex-1 gap-3 overflow-x-auto px-6 pb-6">
           {OPP_STAGES.map((stage) => {
             const items = byStage(stage.id);
-            const colValue = items.reduce((s, o) => s + ((o.props.value as number) || 0), 0);
             return (
               <div
                 key={stage.id}
-                onDragOver={(e) => e.preventDefault()}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                }}
                 onDrop={() => drop(stage.id)}
                 className="flex w-60 shrink-0 flex-col rounded-md bg-notion-sidebar p-2 dark:bg-notion-sidebar-dark"
               >
@@ -77,22 +111,25 @@ export function OpportunitiesModule() {
                   <span className="text-sm font-medium">{stage.label}</span>
                   <span className="text-xs text-notion-muted">{items.length}</span>
                 </div>
-                <div className="mb-1 px-1 text-[11px] text-notion-muted">{colValue.toLocaleString('fr-FR')} €</div>
                 <div className="flex flex-1 flex-col gap-2">
                   {items.map((o) => (
-                    <button
+                    <div
                       key={o.id}
                       draggable
-                      onDragStart={() => setDragId(o.id)}
+                      onDragStart={(e) => {
+                        setDragId(o.id);
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', o.id);
+                      }}
                       onClick={() => setSelected(o.id)}
                       className="cursor-grab rounded-md border border-notion-border bg-white p-2 text-left shadow-sm active:cursor-grabbing dark:border-notion-border-dark dark:bg-[#252525]"
                     >
                       <div className="truncate text-sm font-medium">{o.title || 'Sans titre'}</div>
                       <div className="mt-1 flex items-center justify-between text-xs text-notion-muted">
-                        <span>{((o.props.value as number) || 0).toLocaleString('fr-FR')} €</span>
-                        <span>{(o.props.probability as number) || 0} %</span>
+                        <span className="truncate">{valueLabel(o)}</span>
+                        <span className="shrink-0">{(o.props.probability as number) || 0} %</span>
                       </div>
-                    </button>
+                    </div>
                   ))}
                 </div>
                 <button type="button" onClick={() => void create(stage.id)} className="mt-2 flex items-center gap-1 rounded px-1 py-1 text-xs text-notion-muted hover:bg-notion-hover dark:hover:bg-notion-hover-dark">
@@ -111,11 +148,44 @@ export function OpportunitiesModule() {
             <button onClick={() => setSelected(null)} className="rounded p-1 hover:bg-notion-hover dark:hover:bg-notion-hover-dark"><X size={16} /></button>
           </div>
           <input value={sel.title} onChange={(e) => updateEntity(selected, { title: e.target.value })} className="bg-transparent text-lg font-semibold outline-none" placeholder="Titre" />
-          <Lbl t="Catégorie"><input value={(sel.props.category as string) ?? ''} onChange={(e) => updateProps(selected, { category: e.target.value })} className={inp} placeholder="Job, mission, deal…" /></Lbl>
-          <div className="grid grid-cols-2 gap-2">
+
+          <Lbl t="Étape">
+            <select value={sel.props.stage as string} onChange={(e) => updateProps(selected, { stage: e.target.value })} className={inp}>
+              {OPP_STAGES.map((s) => (<option key={s.id} value={s.id}>{s.label}</option>))}
+            </select>
+          </Lbl>
+
+          <Lbl t="Nature de la valeur">
+            <select value={(sel.props.valueType as ValueType) ?? 'monetary'} onChange={(e) => updateProps(selected, { valueType: e.target.value })} className={inp}>
+              {VALUE_TYPES.map((v) => (<option key={v.id} value={v.id}>{v.label}</option>))}
+            </select>
+          </Lbl>
+
+          {((sel.props.valueType as ValueType) ?? 'monetary') === 'monetary' ? (
             <Lbl t="Valeur (€)"><input type="number" value={(sel.props.value as number) ?? 0} onChange={(e) => updateProps(selected, { value: Number(e.target.value) })} className={inp} /></Lbl>
-            <Lbl t="Probabilité (%)"><input type="number" min={0} max={100} value={(sel.props.probability as number) ?? 0} onChange={(e) => updateProps(selected, { probability: Number(e.target.value) })} className={inp} /></Lbl>
-          </div>
+          ) : (
+            <Lbl t="Valeur (description)"><input value={(sel.props.valueLabel as string) ?? ''} onChange={(e) => updateProps(selected, { valueLabel: e.target.value })} className={inp} placeholder="ex. poste de CFO, intro stratégique…" /></Lbl>
+          )}
+
+          <Lbl t="Probabilité (%)"><input type="number" min={0} max={100} value={(sel.props.probability as number) ?? 0} onChange={(e) => updateProps(selected, { probability: Number(e.target.value) })} className={inp} /></Lbl>
+
+          <Lbl t="Rattaché à (objectif / projet)">
+            <select
+              value={selParent ?? ''}
+              onChange={(e) => setParent(selected, e.target.value || null)}
+              className={inp}
+            >
+              <option value="">— Aucun —</option>
+              {parents.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.type === 'vision' ? '✦ ' : p.type === 'project' ? '📁 ' : '◎ '}
+                  {p.title || 'Sans titre'}
+                </option>
+              ))}
+            </select>
+          </Lbl>
+
+          <Lbl t="Catégorie"><input value={(sel.props.category as string) ?? ''} onChange={(e) => updateProps(selected, { category: e.target.value })} className={inp} placeholder="Job, mission, deal…" /></Lbl>
           <Lbl t="Échéance"><input type="date" value={(sel.props.due as string) ?? ''} onChange={(e) => updateProps(selected, { due: e.target.value })} className={inp} /></Lbl>
           <Lbl t="Prochaine action"><input value={(sel.props.nextAction as string) ?? ''} onChange={(e) => updateProps(selected, { nextAction: e.target.value })} className={inp} placeholder="…" /></Lbl>
           {sel.props.stage === 'lost' && (

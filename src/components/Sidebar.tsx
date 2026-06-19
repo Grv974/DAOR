@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useDatabaseStore } from '@/store/useDatabaseStore';
+import { useEntityStore } from '@/store/useEntityStore';
 import { useUIStore } from '@/store/useUIStore';
 import { PageTreeItem } from './PageTreeItem';
 import { ModuleNav } from '@/components/aura/ModuleNav';
@@ -70,6 +71,7 @@ export function Sidebar() {
         const count = await importJSON(text);
         await init();
         await initDatabases();
+        await useEntityStore.getState().init();
         await rebuildIndex();
         alert(`${count} page(s) importée(s).`);
       }

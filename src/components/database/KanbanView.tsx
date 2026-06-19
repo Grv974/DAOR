@@ -64,7 +64,11 @@ export function KanbanView({ database, view, rows }: KanbanViewProps) {
               <div
                 key={row.id}
                 draggable
-                onDragStart={() => setDragRow(row.id)}
+                onDragStart={(e) => {
+                  setDragRow(row.id);
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('text/plain', row.id);
+                }}
                 className="cursor-grab rounded-md border border-notion-border bg-white p-2 shadow-sm active:cursor-grabbing dark:border-notion-border-dark dark:bg-[#252525]"
               >
                 <input
