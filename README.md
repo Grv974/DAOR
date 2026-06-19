@@ -72,9 +72,13 @@ API publique, Notion AI hébergée.
 - ✅ **S5** : vues kanban / galerie / calendrier, filtres / tris / groupes, templates de lignes.
 - ✅ **S6** : recherche incrémentale (index maintenu en continu) couvrant pages, contenus
   et lignes de bases de données.
-- **S7** : import Markdown, backup GitHub avancé.
-- **S8** : drag & drop de pages/blocs, corbeille, virtualisation (cible 10 000+ pages),
-  code-splitting pour le temps de chargement.
+- ✅ **S7** : import Markdown (.md → page), en plus de l'import/export JSON et de l'export
+  Markdown .zip.
+- ✅ **S8** : drag & drop de réorganisation des pages (réordonner / imbriquer), corbeille
+  (restauration & suppression définitive), guide des fonctionnalités intégré, code-splitting
+  (éditeur et vues de bases chargés à la demande → chunk initial ~108 KB gzip).
+- **À venir** : virtualisation de l'arbre (cible 10 000+ pages), drag & drop de blocs dans
+  l'éditeur, sauvegarde GitHub avancée.
 
 ## Architecture des données
 

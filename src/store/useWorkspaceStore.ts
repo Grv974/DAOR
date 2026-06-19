@@ -49,6 +49,7 @@ interface WorkspaceState {
   restorePage: (id: string) => Promise<void>;
   purgePage: (id: string) => Promise<void>;
   reorderChildren: (parentId: string | null, order: string[]) => void;
+  movePage: (id: string, newParentId: string | null, index: number) => void;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
@@ -249,5 +250,63 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     } else {
       get().updatePage(parentId, { childrenOrder: order });
     }
+  },
+
+  movePage(id, newParentId, index) {
+    const state = get();
+    const page = state.pages[id];
+    if (!page || newParentId === id) return;
+
+    // Reject moves that would create a cycle (target inside the moved subtree).
+    if (newParentId) {
+      let cur: Page | undefined = state.pages[newParentId];
+      while (cur) {
+        if (cur.id === id) return;
+        cur = cur.parentId ? state.pages[cur.parentId] : undefined;
+      }
+    }
+
+    const now = Date.now();
+    const pages = { ...state.pages };
+    let rootOrder = [...state.rootOrder];
+    const oldParentId = page.parentId;
+
+    // Detach from current location.
+    if (oldParentId === null) {
+      rootOrder = rootOrder.filter((x) => x !== id);
+    } else if (pages[oldParentId]) {
+      pages[oldParentId] = {
+        ...pages[oldParentId],
+        childrenOrder: pages[oldParentId].childrenOrder.filter((x) => x !== id),
+      };
+    }
+
+    // Attach at the new location.
+    if (newParentId === null) {
+      const idx = Math.max(0, Math.min(index, rootOrder.length));
+      rootOrder.splice(idx, 0, id);
+      saveRootOrder(rootOrder);
+    } else {
+      const np = pages[newParentId];
+      if (!np) return;
+      const childrenOrder = np.childrenOrder.filter((x) => x !== id);
+      const idx = Math.max(0, Math.min(index, childrenOrder.length));
+      childrenOrder.splice(idx, 0, id);
+      pages[newParentId] = { ...np, childrenOrder, updatedAt: now };
+    }
+    if (oldParentId === null && newParentId !== null) saveRootOrder(rootOrder);
+
+    pages[id] = { ...page, parentId: newParentId, updatedAt: now };
+
+    // Persist affected records.
+    void db.pages.update(id, { parentId: newParentId, updatedAt: now });
+    if (oldParentId && pages[oldParentId]) {
+      void db.pages.update(oldParentId, { childrenOrder: pages[oldParentId].childrenOrder });
+    }
+    if (newParentId && pages[newParentId]) {
+      void db.pages.update(newParentId, { childrenOrder: pages[newParentId].childrenOrder });
+    }
+
+    set({ pages, rootOrder });
   },
 }));

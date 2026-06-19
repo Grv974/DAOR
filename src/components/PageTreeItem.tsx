@@ -8,6 +8,10 @@ interface PageTreeItemProps {
   depth: number;
 }
 
+// Shared across instances: the page currently being dragged.
+let draggedId: string | null = null;
+type DropZone = 'top' | 'middle' | 'bottom' | null;
+
 export function PageTreeItem({ pageId, depth }: PageTreeItemProps) {
   const navigate = useNavigate();
   const { id: activeId } = useParams();
@@ -15,8 +19,46 @@ export function PageTreeItem({ pageId, depth }: PageTreeItemProps) {
   const createPage = useWorkspaceStore((s) => s.createPage);
   const trashPage = useWorkspaceStore((s) => s.trashPage);
   const toggleFavorite = useWorkspaceStore((s) => s.toggleFavorite);
+  const movePage = useWorkspaceStore((s) => s.movePage);
   const [expanded, setExpanded] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [dropZone, setDropZone] = useState<DropZone>(null);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    if (!draggedId || draggedId === pageId) return;
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ratio = (e.clientY - rect.top) / rect.height;
+    setDropZone(ratio < 0.3 ? 'top' : ratio > 0.7 ? 'bottom' : 'middle');
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const dragId = draggedId;
+    const zone = dropZone;
+    draggedId = null;
+    setDropZone(null);
+    if (!dragId || dragId === pageId || !zone) return;
+
+    const st = useWorkspaceStore.getState();
+    const target = st.pages[pageId];
+    if (!target) return;
+
+    if (zone === 'middle') {
+      // Nest the dragged page as a child of this one.
+      st.movePage(dragId, pageId, target.childrenOrder.length);
+      setExpanded(true);
+      return;
+    }
+    // Reorder as a sibling (before/after this page).
+    const parentId = target.parentId;
+    const list = parentId ? (st.pages[parentId]?.childrenOrder ?? []) : st.rootOrder;
+    const filtered = list.filter((x) => x !== dragId);
+    let tIdx = filtered.indexOf(pageId);
+    if (tIdx < 0) tIdx = filtered.length;
+    movePage(dragId, parentId, zone === 'bottom' ? tIdx + 1 : tIdx);
+  };
 
   if (!page || page.trashed) return null;
 
@@ -36,13 +78,28 @@ export function PageTreeItem({ pageId, depth }: PageTreeItemProps) {
       <div
         role="button"
         tabIndex={0}
+        draggable
+        onDragStart={(e) => {
+          draggedId = pageId;
+          e.dataTransfer.effectAllowed = 'move';
+          e.stopPropagation();
+        }}
+        onDragEnd={() => {
+          draggedId = null;
+          setDropZone(null);
+        }}
+        onDragOver={handleDragOver}
+        onDragLeave={() => setDropZone(null)}
+        onDrop={handleDrop}
         onClick={() => navigate(`/page/${pageId}`)}
         onKeyDown={(e) => e.key === 'Enter' && navigate(`/page/${pageId}`)}
         className={`group flex items-center gap-1 rounded px-1 py-1 text-sm ${
           isActive
             ? 'bg-notion-hover font-medium dark:bg-notion-hover-dark'
             : 'hover:bg-notion-hover dark:hover:bg-notion-hover-dark'
-        }`}
+        } ${dropZone === 'middle' ? 'ring-2 ring-inset ring-notion-accent' : ''} ${
+          dropZone === 'top' ? 'border-t-2 border-notion-accent' : ''
+        } ${dropZone === 'bottom' ? 'border-b-2 border-notion-accent' : ''}`}
         style={{ paddingLeft: depth * 14 + 4 }}
       >
         <button
