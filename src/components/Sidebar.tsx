@@ -15,6 +15,8 @@ import { useDatabaseStore } from '@/store/useDatabaseStore';
 import { useUIStore } from '@/store/useUIStore';
 import { PageTreeItem } from './PageTreeItem';
 import { exportJSON, exportMarkdownZip, importJSON } from '@/lib/backup';
+import { db } from '@/db/db';
+import { searchIndex } from '@/lib/searchIndex';
 
 export function Sidebar() {
   const navigate = useNavigate();
@@ -48,6 +50,13 @@ export function Sidebar() {
       const count = await importJSON(text);
       await init();
       await initDatabases();
+      // Rebuild the search index from the freshly imported data.
+      const allRows = await db.rows.toArray();
+      searchIndex.buildAll(
+        Object.values(useWorkspaceStore.getState().pages),
+        useDatabaseStore.getState().databases,
+        allRows,
+      );
       alert(`${count} page(s) importée(s).`);
     } catch (err) {
       alert(`Échec de l'import : ${(err as Error).message}`);
