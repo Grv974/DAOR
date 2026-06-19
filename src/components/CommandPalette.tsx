@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Search } from 'lucide-react';
+import { FileText, Search, Table2 } from 'lucide-react';
 import { useUIStore } from '@/store/useUIStore';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
-import { buildIndex } from '@/lib/search';
+import { searchIndex, type SearchHit } from '@/lib/searchIndex';
 
 export function CommandPalette() {
   const navigate = useNavigate();
@@ -12,12 +12,6 @@ export function CommandPalette() {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
 
-  // Rebuild the search index whenever the palette opens.
-  const index = useMemo(
-    () => (searchOpen ? buildIndex(Object.values(pages)) : null),
-    [searchOpen, pages],
-  );
-
   useEffect(() => {
     if (searchOpen) {
       setQuery('');
@@ -25,28 +19,42 @@ export function CommandPalette() {
     }
   }, [searchOpen]);
 
-  const results = useMemo(() => {
-    if (!index) return [];
+  const results = useMemo<SearchHit[]>(() => {
+    if (!searchOpen) return [];
     if (!query.trim()) {
+      // Recent pages when no query.
       return Object.values(pages)
         .filter((p) => !p.trashed)
         .sort((a, b) => b.updatedAt - a.updatedAt)
         .slice(0, 8)
-        .map((p) => ({ id: p.id, title: p.title || 'Sans titre' }));
+        .map((p) => ({
+          id: `page:${p.id}`,
+          title: p.title || 'Sans titre',
+          kind: 'page' as const,
+          pageId: p.id,
+        }));
     }
-    return index
-      .search(query)
-      .slice(0, 12)
-      .map((r) => ({ id: r.id as string, title: (r as unknown as { title: string }).title }));
-  }, [index, query, pages]);
+    // De-duplicate by target page so multiple row hits in one DB collapse.
+    const hits = searchIndex.search(query);
+    const seen = new Set<string>();
+    const out: SearchHit[] = [];
+    for (const h of hits) {
+      const key = `${h.kind}:${h.pageId}:${h.title}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(h);
+      if (out.length >= 14) break;
+    }
+    return out;
+  }, [searchOpen, query, pages]);
 
   useEffect(() => setSelected(0), [results.length]);
 
   if (!searchOpen) return null;
 
-  const go = (id: string) => {
+  const go = (pageId: string) => {
     setSearchOpen(false);
-    navigate(`/page/${id}`);
+    navigate(`/page/${pageId}`);
   };
 
   return (
@@ -73,12 +81,12 @@ export function CommandPalette() {
                 setSelected((s) => Math.max(s - 1, 0));
               } else if (e.key === 'Enter') {
                 const r = results[selected];
-                if (r) go(r.id);
+                if (r) go(r.pageId);
               } else if (e.key === 'Escape') {
                 setSearchOpen(false);
               }
             }}
-            placeholder="Rechercher une page ou un contenu…"
+            placeholder="Rechercher pages, contenus et bases…"
             className="w-full bg-transparent text-sm outline-none placeholder:text-notion-muted"
           />
         </div>
@@ -91,13 +99,22 @@ export function CommandPalette() {
                 key={r.id}
                 type="button"
                 onMouseEnter={() => setSelected(i)}
-                onClick={() => go(r.id)}
+                onClick={() => go(r.pageId)}
                 className={`flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm ${
                   i === selected ? 'bg-notion-hover dark:bg-notion-hover-dark' : ''
                 }`}
               >
-                <FileText size={16} className="text-notion-muted" />
-                <span className="truncate">{r.title}</span>
+                {r.kind === 'row' ? (
+                  <Table2 size={16} className="text-notion-muted" />
+                ) : (
+                  <FileText size={16} className="text-notion-muted" />
+                )}
+                <span className="flex-1 truncate">{r.title}</span>
+                {r.kind === 'row' && (
+                  <span className="shrink-0 rounded bg-notion-hover px-1.5 py-0.5 text-[10px] text-notion-muted dark:bg-notion-hover-dark">
+                    base
+                  </span>
+                )}
               </button>
             ))
           )}

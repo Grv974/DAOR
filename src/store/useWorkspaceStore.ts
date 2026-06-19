@@ -3,6 +3,7 @@ import { db } from '@/db/db';
 import type { Page } from '@/types';
 import { newId } from '@/lib/id';
 import { createKeyedDebounce } from '@/lib/debounce';
+import { searchIndex } from '@/lib/searchIndex';
 
 const ROOT_ORDER_KEY = 'daor:rootOrder';
 
@@ -26,6 +27,12 @@ function saveRootOrder(order: string[]) {
 // Debounced persistence of page content so typing does not hammer IndexedDB.
 const persistContent = createKeyedDebounce((id: string, content: unknown) => {
   void db.pages.update(id, { content, updatedAt: Date.now() });
+}, 600);
+
+// Debounced search re-index of a page (title + content) to avoid re-tokenising
+// on every keystroke.
+const reindexPage = createKeyedDebounce((_id: string, page: Page) => {
+  searchIndex.upsertPage(page);
 }, 600);
 
 interface WorkspaceState {
@@ -84,6 +91,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       ...partial,
     };
     await db.pages.put(page);
+    searchIndex.upsertPage(page);
 
     set((state) => {
       const pages = { ...state.pages, [page.id]: page };
@@ -118,6 +126,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       if (!current) return state;
       const updated = { ...current, ...patch, updatedAt: Date.now() };
       void db.pages.update(id, { ...patch, updatedAt: updated.updatedAt });
+      // Title (and other metadata) changes are reflected in search.
+      if ('title' in patch || 'trashed' in patch) searchIndex.upsertPage(updated);
       return { pages: { ...state.pages, [id]: updated } };
     });
   },
@@ -129,6 +139,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       // Keep the in-memory copy fresh immediately; persist is debounced.
       const updated = { ...current, content, updatedAt: Date.now() };
       persistContent(id, content);
+      reindexPage(id, updated);
       return { pages: { ...state.pages, [id]: updated } };
     });
   },
@@ -155,6 +166,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         await db.pages.update(pid, { trashed: true, updatedAt: now });
       }
     });
+    for (const pid of toTrash) searchIndex.removePage(pid);
 
     set((state) => {
       const next = { ...state.pages };
@@ -188,6 +200,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     if (!target) return;
     const now = Date.now();
     await db.pages.update(id, { trashed: false, updatedAt: now });
+    searchIndex.upsertPage({ ...target, trashed: false, updatedAt: now });
 
     set((state) => {
       const next = { ...state.pages };
@@ -219,6 +232,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     };
     walk(id);
     await db.pages.bulkDelete(toDelete);
+    for (const pid of toDelete) searchIndex.removePage(pid);
     set((state) => {
       const next = { ...state.pages };
       for (const pid of toDelete) delete next[pid];

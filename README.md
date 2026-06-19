@@ -70,7 +70,8 @@ API publique, Notion AI hébergée.
 - ✅ **S4** : bases de données locales (propriétés texte/nombre/date/checkbox/select/multi-select),
   vue table éditable.
 - ✅ **S5** : vues kanban / galerie / calendrier, filtres / tris / groupes, templates de lignes.
-- **S6** : recherche incrémentale (index maintenu en continu) + recherche dans les bases.
+- ✅ **S6** : recherche incrémentale (index maintenu en continu) couvrant pages, contenus
+  et lignes de bases de données.
 - **S7** : import Markdown, backup GitHub avancé.
 - **S8** : drag & drop de pages/blocs, corbeille, virtualisation (cible 10 000+ pages),
   code-splitting pour le temps de chargement.

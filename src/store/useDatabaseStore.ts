@@ -12,6 +12,7 @@ import type {
 } from '@/types';
 import { newId } from '@/lib/id';
 import { pickColor } from '@/lib/colors';
+import { searchIndex } from '@/lib/searchIndex';
 
 const VIEW_LABELS: Record<ViewType, string> = {
   table: 'Table',
@@ -266,6 +267,8 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
       updatedAt: now,
     };
     await db.rows.put(row);
+    const dbRec = get().databases[dbId];
+    if (dbRec) searchIndex.upsertRow(dbRec, row);
     set((s) => ({
       rowsByDb: { ...s.rowsByDb, [dbId]: [...(s.rowsByDb[dbId] ?? []), row] },
     }));
@@ -281,6 +284,8 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
       updatedAt: Date.now(),
     };
     void db.rows.put(updated);
+    const dbRec = get().databases[dbId];
+    if (dbRec) searchIndex.upsertRow(dbRec, updated);
     set((s) => ({
       rowsByDb: {
         ...s.rowsByDb,
@@ -291,6 +296,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
 
   async deleteRow(rowId, dbId) {
     await db.rows.delete(rowId);
+    searchIndex.removeRow(rowId);
     set((s) => ({
       rowsByDb: {
         ...s.rowsByDb,
@@ -300,10 +306,12 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
   },
 
   async deleteDatabase(dbId) {
+    const rowIds = await db.rows.where('databaseId').equals(dbId).primaryKeys();
     await db.transaction('rw', db.databases, db.rows, async () => {
       await db.databases.delete(dbId);
       await db.rows.where('databaseId').equals(dbId).delete();
     });
+    for (const rid of rowIds) searchIndex.removeRow(rid as string);
     set((s) => {
       const databases = { ...s.databases };
       delete databases[dbId];

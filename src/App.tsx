@@ -8,6 +8,8 @@ import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useDatabaseStore } from '@/store/useDatabaseStore';
 import { useUIStore } from '@/store/useUIStore';
 import { useParams } from 'react-router-dom';
+import { db } from '@/db/db';
+import { searchIndex } from '@/lib/searchIndex';
 
 function Home() {
   const navigate = useNavigate();
@@ -59,8 +61,17 @@ export default function App() {
   const setSearchOpen = useUIStore((s) => s.setSearchOpen);
 
   useEffect(() => {
-    void init();
-    void initDatabases();
+    void (async () => {
+      await Promise.all([init(), initDatabases()]);
+      // Build the search index once data is loaded; it stays in sync
+      // incrementally afterwards via store mutations.
+      const allRows = await db.rows.toArray();
+      searchIndex.buildAll(
+        Object.values(useWorkspaceStore.getState().pages),
+        useDatabaseStore.getState().databases,
+        allRows,
+      );
+    })();
   }, [init, initDatabases]);
 
   // Global Ctrl/Cmd+K to open search.
