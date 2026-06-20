@@ -1,5 +1,5 @@
-import { lazy, Suspense, useEffect } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { lazy, Suspense, useEffect, useRef } from 'react';
+import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { PanelLeft } from 'lucide-react';
 import { Sidebar } from '@/components/Sidebar';
 import { Topbar } from '@/components/Topbar';
@@ -7,6 +7,7 @@ import { PageView } from '@/components/PageView';
 import { CommandPalette } from '@/components/CommandPalette';
 import { HelpGuide } from '@/components/HelpGuide';
 import { TrashModal } from '@/components/TrashModal';
+import { QuickCapture } from '@/components/aura/QuickCapture';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useDatabaseStore } from '@/store/useDatabaseStore';
 import { useEntityStore } from '@/store/useEntityStore';
@@ -51,6 +52,9 @@ export default function App() {
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
   const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
   const setSearchOpen = useUIStore((s) => s.setSearchOpen);
+  const setCaptureOpen = useUIStore((s) => s.setCaptureOpen);
+  const navigate = useNavigate();
+  const gPrefix = useRef(0);
 
   useEffect(() => {
     void (async () => {
@@ -66,17 +70,35 @@ export default function App() {
     })();
   }, [init, initDatabases, initEntities]);
 
-  // Global Ctrl/Cmd+K to open search.
+  // Global keyboard shortcuts (§3.4).
   useEffect(() => {
+    const isTyping = (el: EventTarget | null) => {
+      const t = el as HTMLElement | null;
+      return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+    };
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setSearchOpen(true);
+      const mod = e.metaKey || e.ctrlKey;
+      const key = e.key.toLowerCase();
+
+      if (mod && key === 'k') { e.preventDefault(); setSearchOpen(true); return; }
+      if (mod && key === 'n') { e.preventDefault(); setCaptureOpen(true); return; }
+      if (mod && key === 'j') { e.preventDefault(); navigate('/m/journal'); return; }
+
+      if (isTyping(e.target)) return;
+
+      if (e.key === '[') { setSidebarOpen(false); return; }
+      if (e.key === ']') { setSidebarOpen(true); return; }
+
+      // "g" then a destination key (g g → graphe).
+      if (Date.now() - gPrefix.current < 700) {
+        const dest: Record<string, string> = { o: '/m/objectives', p: '/m/projects', c: '/m/crm', d: '/m/dashboard', j: '/m/journal', g: '/m/graph' };
+        if (dest[key]) { navigate(dest[key]); gPrefix.current = 0; return; }
       }
+      if (key === 'g') { gPrefix.current = Date.now(); return; }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [setSearchOpen]);
+  }, [setSearchOpen, setCaptureOpen, setSidebarOpen, navigate]);
 
   if (!loaded) {
     return (
@@ -121,6 +143,7 @@ export default function App() {
       <CommandPalette />
       <HelpGuide />
       <TrashModal />
+      <QuickCapture />
     </div>
   );
 }
