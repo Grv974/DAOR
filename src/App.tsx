@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef } from 'react';
-import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
-import { PanelLeft } from 'lucide-react';
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Menu } from 'lucide-react';
 import { Sidebar } from '@/components/Sidebar';
 import { Topbar } from '@/components/Topbar';
 import { PageView } from '@/components/PageView';
@@ -56,7 +56,15 @@ export default function App() {
   const setSearchOpen = useUIStore((s) => s.setSearchOpen);
   const setCaptureOpen = useUIStore((s) => s.setCaptureOpen);
   const navigate = useNavigate();
+  const location = useLocation();
   const gPrefix = useRef(0);
+
+  // On mobile, collapse the sidebar drawer whenever the route changes.
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches) {
+      setSidebarOpen(false);
+    }
+  }, [location.pathname, setSidebarOpen]);
 
   useEffect(() => {
     void (async () => {
@@ -110,21 +118,33 @@ export default function App() {
 
   return (
     <div className="flex h-full bg-notion-bg text-notion-text dark:bg-notion-bg-dark dark:text-notion-text-dark">
-      {sidebarOpen && <Sidebar />}
+      {/* Sidebar: static column on desktop, slide-over drawer on mobile. */}
+      {sidebarOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-30 bg-black/40 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+            aria-hidden
+          />
+          <div className="fixed inset-y-0 left-0 z-40 md:static md:z-auto">
+            <Sidebar />
+          </div>
+        </>
+      )}
 
       {/* Always-available control to bring the sidebar back when collapsed. */}
       {!sidebarOpen && (
         <button
           type="button"
           onClick={() => setSidebarOpen(true)}
-          className="fixed left-2 top-2 z-40 rounded-md border border-notion-border bg-white/90 p-1.5 shadow-sm backdrop-blur hover:bg-notion-hover dark:border-notion-border-dark dark:bg-[#2a2a2a]/90 dark:hover:bg-notion-hover-dark"
+          className="fixed left-2 top-2 z-40 rounded-md border border-notion-border bg-white/90 p-2 shadow-sm backdrop-blur hover:bg-notion-hover dark:border-notion-border-dark dark:bg-[#2a2a2a]/90 dark:hover:bg-notion-hover-dark"
           title="Afficher le menu latéral"
         >
-          <PanelLeft size={18} />
+          <Menu size={18} />
         </button>
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className={`flex min-w-0 flex-1 flex-col ${sidebarOpen ? '' : 'pl-11 md:pl-0'}`}>
         <Suspense fallback={<ModuleFallback />}>
           <Routes>
             <Route path="/" element={<Navigate to="/m/dashboard" replace />} />

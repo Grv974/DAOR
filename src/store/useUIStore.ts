@@ -33,9 +33,17 @@ interface UIState {
   setSyncOpen: (open: boolean) => void;
 }
 
+function initialSidebar(): boolean {
+  try {
+    return window.matchMedia('(min-width: 768px)').matches;
+  } catch {
+    return true;
+  }
+}
+
 export const useUIStore = create<UIState>((set, get) => ({
   theme: initialTheme(),
-  sidebarOpen: true,
+  sidebarOpen: initialSidebar(),
   searchOpen: false,
   helpOpen: false,
   trashOpen: false,

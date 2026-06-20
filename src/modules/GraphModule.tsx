@@ -58,6 +58,8 @@ export function GraphModule() {
   const dragNode = useRef<{ id: string; dx: number; dy: number } | null>(null);
   const pan = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
   const linkDrag = useRef<{ source: string; x: number; y: number } | null>(null);
+  const bgPointers = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinch = useRef<{ dist: number; k: number; cx: number; cy: number; tx: number; ty: number } | null>(null);
   const transformRef = useRef(transform);
   transformRef.current = transform;
 
@@ -179,14 +181,29 @@ export function GraphModule() {
     rerender();
   }, [layout]);
 
-  // Window-level pointer handlers for drag / pan / link-drag.
+  // Window-level pointer handlers for drag / pan / link-drag / pinch-zoom.
+  // Pointer events unify mouse + touch; two background pointers = pinch.
   useEffect(() => {
     const toGraph = (clientX: number, clientY: number) => {
       const rect = svgRef.current!.getBoundingClientRect();
       const { k, tx, ty } = transformRef.current;
       return { x: (clientX - rect.left - tx) / k, y: (clientY - rect.top - ty) / k };
     };
-    const onMove = (e: MouseEvent) => {
+    const onMove = (e: PointerEvent) => {
+      if (bgPointers.current.has(e.pointerId)) bgPointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      // Pinch-zoom (two fingers on the background).
+      if (pinch.current && bgPointers.current.size >= 2) {
+        const [p1, p2] = [...bgPointers.current.values()];
+        const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y) || 1;
+        const k = Math.max(0.2, Math.min(3, pinch.current.k * (dist / pinch.current.dist)));
+        const r = k / pinch.current.k;
+        setTransform({
+          k,
+          tx: pinch.current.cx - (pinch.current.cx - pinch.current.tx) * r,
+          ty: pinch.current.cy - (pinch.current.cy - pinch.current.ty) * r,
+        });
+        return;
+      }
       if (dragNode.current) {
         const g = toGraph(e.clientX, e.clientY);
         const n = posRef.current.get(dragNode.current.id);
@@ -198,7 +215,10 @@ export function GraphModule() {
         setTransform((tf) => ({ ...tf, tx: pan.current!.tx + (e.clientX - pan.current!.x), ty: pan.current!.ty + (e.clientY - pan.current!.y) }));
       }
     };
-    const onUp = (e: MouseEvent) => {
+    const onUp = (e: PointerEvent) => {
+      bgPointers.current.delete(e.pointerId);
+      if (bgPointers.current.size < 2) pinch.current = null;
+      if (bgPointers.current.size === 0) pan.current = null;
       if (dragNode.current) {
         const n = posRef.current.get(dragNode.current.id);
         if (n) updateProps(dragNode.current.id, { x: Math.round(n.x), y: Math.round(n.y) });
@@ -217,11 +237,15 @@ export function GraphModule() {
         linkDrag.current = null;
         rerender();
       }
-      pan.current = null;
     };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
   }, [updateProps]);
 
   const onWheel = (e: React.WheelEvent) => {
@@ -332,10 +356,25 @@ export function GraphModule() {
 
         <svg
           ref={svgRef}
-          className="h-full w-full cursor-grab active:cursor-grabbing"
+          className="h-full w-full cursor-grab touch-none active:cursor-grabbing"
+          style={{ touchAction: 'none' }}
           onWheel={onWheel}
-          onMouseDown={(e) => {
-            if (e.target === svgRef.current) {
+          onPointerDown={(e) => {
+            if (e.target !== svgRef.current) return;
+            const rect = svgRef.current.getBoundingClientRect();
+            bgPointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+            if (bgPointers.current.size === 2) {
+              const [p1, p2] = [...bgPointers.current.values()];
+              pan.current = null;
+              pinch.current = {
+                dist: Math.hypot(p1.x - p2.x, p1.y - p2.y) || 1,
+                k,
+                cx: (p1.x + p2.x) / 2 - rect.left,
+                cy: (p1.y + p2.y) / 2 - rect.top,
+                tx,
+                ty,
+              };
+            } else if (bgPointers.current.size === 1) {
               pan.current = { x: e.clientX, y: e.clientY, tx, ty };
               setSelected(null);
             }
@@ -393,7 +432,7 @@ export function GraphModule() {
                   style={{ cursor: 'pointer' }}
                   onMouseEnter={() => setHovered(n.id)}
                   onMouseLeave={() => setHovered(null)}
-                  onMouseDown={(e) => {
+                  onPointerDown={(e) => {
                     e.stopPropagation();
                     const rect = svgRef.current!.getBoundingClientRect();
                     const gx = (e.clientX - rect.left - tx) / k;
@@ -410,9 +449,9 @@ export function GraphModule() {
                   {/* Link handle */}
                   {(hovered === n.id || isSel) && (
                     <circle
-                      r={4} cx={radius} cy={-radius} fill="#2383e2" stroke="#fff" strokeWidth={1}
+                      r={6} cx={radius} cy={-radius} fill="#2383e2" stroke="#fff" strokeWidth={1.5}
                       style={{ cursor: 'crosshair' }}
-                      onMouseDown={(e) => { e.stopPropagation(); linkDrag.current = { source: n.id, x: p.x, y: p.y }; }}
+                      onPointerDown={(e) => { e.stopPropagation(); linkDrag.current = { source: n.id, x: p.x, y: p.y }; }}
                     />
                   )}
                 </g>
@@ -455,7 +494,7 @@ export function GraphModule() {
 
       {/* Side panel */}
       {sel && selected && (
-        <aside className="flex h-full w-72 shrink-0 flex-col gap-3 overflow-y-auto border-l border-notion-border p-4 dark:border-notion-border-dark">
+        <aside className="fixed inset-0 z-30 flex h-full w-full shrink-0 flex-col gap-3 overflow-y-auto border-l border-notion-border bg-notion-bg p-4 dark:border-notion-border-dark dark:bg-notion-bg-dark md:static md:z-auto md:w-72 dark:md:bg-transparent">
           <div className="flex items-center justify-between">
             <span className="rounded px-1.5 py-0.5 text-[10px] text-white" style={{ background: NODE_COLOR[sel.type] }}>{sel.type}</span>
             <button onClick={() => setSelected(null)} className="rounded p-1 hover:bg-notion-hover dark:hover:bg-notion-hover-dark"><X size={16} /></button>

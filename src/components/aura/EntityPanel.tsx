@@ -48,7 +48,7 @@ export function EntityPanel({ entityId, onClose }: EntityPanelProps) {
   const setKpis = (next: KPI[]) => updateProps(entityId, { kpis: next });
 
   return (
-    <aside className="flex h-full w-80 shrink-0 flex-col overflow-y-auto border-l border-notion-border bg-notion-sidebar/40 dark:border-notion-border-dark dark:bg-notion-sidebar-dark/40">
+    <aside className="fixed inset-0 z-30 flex h-full w-full shrink-0 flex-col overflow-y-auto border-l border-notion-border bg-notion-bg dark:border-notion-border-dark dark:bg-notion-bg-dark md:static md:z-auto md:w-80 md:bg-notion-sidebar/40 md:dark:bg-notion-sidebar-dark/40">
       <div className="flex items-center justify-between px-4 py-3">
         <span className="text-xs font-semibold uppercase tracking-wide text-notion-muted">Détails</span>
         <button type="button" onClick={onClose} className="rounded p-1 hover:bg-notion-hover dark:hover:bg-notion-hover-dark">

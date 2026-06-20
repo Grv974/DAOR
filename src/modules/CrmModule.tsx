@@ -49,7 +49,7 @@ export function CrmModule() {
   return (
     <div className="flex h-full">
       {/* List */}
-      <div className="flex w-72 shrink-0 flex-col border-r border-notion-border dark:border-notion-border-dark">
+      <div className={`${selected ? 'hidden md:flex' : 'flex'} w-full shrink-0 flex-col border-r border-notion-border md:w-72 dark:border-notion-border-dark`}>
         <div className="flex items-center gap-2 px-3 py-3">
           <h1 className="text-lg font-bold">CRM</h1>
           <button onClick={addContact} className="ml-auto rounded-md bg-notion-accent px-2 py-1 text-xs font-medium text-white">
@@ -145,7 +145,7 @@ function ContactCard({ contactId, onClose }: { contactId: string; onClose: () =>
           <button onClick={onClose} className="rounded p-1 hover:bg-notion-hover dark:hover:bg-notion-hover-dark"><X size={16} /></button>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <F t="Entreprise"><input value={(p.company as string) ?? ''} onChange={(e) => updateProps(contactId, { company: e.target.value })} className={inp} /></F>
           <F t="Poste"><input value={(p.role as string) ?? ''} onChange={(e) => updateProps(contactId, { role: e.target.value })} className={inp} /></F>
           <F t="Secteur"><input value={(p.sector as string) ?? ''} onChange={(e) => updateProps(contactId, { sector: e.target.value })} className={inp} /></F>

@@ -216,7 +216,7 @@ function ProjectBoard({ projectId, tasks, onAddTask }: { projectId: string; task
 
         {/* Task editor */}
         {et && editTask && (
-          <aside className="flex w-72 shrink-0 flex-col gap-3 overflow-y-auto border-l border-notion-border p-4 dark:border-notion-border-dark">
+          <aside className="fixed inset-0 z-30 flex h-full w-full shrink-0 flex-col gap-3 overflow-y-auto border-l border-notion-border bg-notion-bg p-4 dark:border-notion-border-dark dark:bg-notion-bg-dark md:static md:z-auto md:h-auto md:w-72 md:bg-transparent dark:md:bg-transparent">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase text-notion-muted">Tâche</span>
               <button onClick={() => setEditTask(null)} className="rounded p-1 hover:bg-notion-hover dark:hover:bg-notion-hover-dark"><X size={16} /></button>
