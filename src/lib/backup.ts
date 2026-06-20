@@ -3,6 +3,7 @@ import type { Database, FileBlob, Page, Row } from '@/types';
 import type { Commitment, Entity, Interaction, Relation } from '@/types/aura';
 import { tiptapToMarkdown } from '@/lib/markdown';
 import { createZip } from '@/lib/zip';
+import { encryptString } from '@/lib/crypto';
 
 const BACKUP_VERSION = 2;
 
@@ -57,7 +58,8 @@ function base64ToBlob(base64: string, mime: string): Blob {
 }
 
 /** Full workspace backup as a single JSON file (pages + embedded files). */
-export async function exportJSON(): Promise<void> {
+/** Serialize the full workspace (Notion socle + AURA) to a JSON string. */
+export async function buildBackupString(): Promise<string> {
   const pages = await db.pages.toArray();
   const databases = await db.databases.toArray();
   const rows = await db.rows.toArray();
@@ -89,9 +91,24 @@ export async function exportJSON(): Promise<void> {
     commitments,
     interactions,
   };
+  return JSON.stringify(backup, null, 2);
+}
+
+export async function exportJSON(): Promise<void> {
+  const str = await buildBackupString();
   downloadBlob(
-    new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }),
+    new Blob([str], { type: 'application/json' }),
     `daor-backup-${new Date().toISOString().slice(0, 10)}.json`,
+  );
+}
+
+/** Export an encrypted backup (AES-GCM, passphrase-derived key). */
+export async function exportEncryptedJSON(passphrase: string): Promise<void> {
+  const str = await buildBackupString();
+  const env = await encryptString(str, passphrase);
+  downloadBlob(
+    new Blob([JSON.stringify(env)], { type: 'application/json' }),
+    `daor-backup-${new Date().toISOString().slice(0, 10)}.daor.enc.json`,
   );
 }
 

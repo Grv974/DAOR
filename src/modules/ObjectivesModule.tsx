@@ -13,6 +13,7 @@ import { useEntityStore } from '@/store/useEntityStore';
 import { HORIZON_LABELS, type Entity, type EntityType, type Horizon } from '@/types/aura';
 import { ProgressBar } from '@/components/aura/ProgressBar';
 import { EntityPanel } from '@/components/aura/EntityPanel';
+import { applyCascadeTemplate, CASCADE_TEMPLATES } from '@/lib/aura/cascadeTemplates';
 
 const TYPE_ICON = {
   vision: Sparkles,
@@ -29,6 +30,7 @@ export function ObjectivesModule() {
   const orphans = useEntityStore((s) => s.orphans);
   const [selected, setSelected] = useState<string | null>(null);
   const [showOrphans, setShowOrphans] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
 
   const cascadeTypes: EntityType[] = ['vision', 'objective', 'project', 'task'];
   const hasParent = new Set(relations.filter((r) => r.type === 'parent').map((r) => r.source));
@@ -61,13 +63,42 @@ export function ObjectivesModule() {
           <div className="mb-4 flex items-center gap-3">
             <Target size={22} className="text-notion-accent" />
             <h1 className="text-2xl font-bold">Objectifs</h1>
-            <div className="ml-auto flex gap-1">
+            <div className="relative ml-auto flex gap-1">
+              <button type="button" onClick={() => setTemplatesOpen((v) => !v)} className={btnCls}>
+                Modèles
+              </button>
               <button type="button" onClick={() => void createRoot('vision')} className={btnCls}>
                 <Sparkles size={14} /> Vision
               </button>
               <button type="button" onClick={() => void createRoot('objective')} className={btnCls}>
                 <Plus size={14} /> Objectif
               </button>
+              {templatesOpen && (
+                <>
+                  <div className="fixed inset-0 z-20" onClick={() => setTemplatesOpen(false)} />
+                  <div className="absolute right-0 top-8 z-30 w-72 rounded-md border border-notion-border bg-white p-1 shadow-lg dark:border-notion-border-dark dark:bg-[#252525]">
+                    <div className="px-2 py-1 text-[11px] uppercase tracking-wide text-notion-muted">Modèles de cascade</div>
+                    {CASCADE_TEMPLATES.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={async () => {
+                          setTemplatesOpen(false);
+                          const id = await applyCascadeTemplate(t);
+                          setSelected(id);
+                        }}
+                        className="flex w-full items-start gap-2 rounded px-2 py-1.5 text-left hover:bg-notion-hover dark:hover:bg-notion-hover-dark"
+                      >
+                        <span className="text-lg">{t.emoji}</span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium">{t.name}</span>
+                          <span className="block text-xs text-notion-muted">{t.description}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           </div>
 

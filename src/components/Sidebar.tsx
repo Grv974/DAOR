@@ -5,6 +5,7 @@ import {
   Download,
   FileDown,
   HelpCircle,
+  Lock,
   Plus,
   Search,
   Sparkles,
@@ -19,7 +20,8 @@ import { useEntityStore } from '@/store/useEntityStore';
 import { useUIStore } from '@/store/useUIStore';
 import { PageTreeItem } from './PageTreeItem';
 import { ModuleNav } from '@/components/aura/ModuleNav';
-import { exportJSON, exportMarkdownZip, importJSON } from '@/lib/backup';
+import { exportEncryptedJSON, exportJSON, exportMarkdownZip, importJSON } from '@/lib/backup';
+import { decryptString, isEncryptedEnvelope } from '@/lib/crypto';
 import { markdownToTiptap } from '@/lib/markdownImport';
 import { db } from '@/db/db';
 import { searchIndex } from '@/lib/searchIndex';
@@ -69,7 +71,14 @@ export function Sidebar() {
         const id = await createPage(null, { title: title || fallback, content: doc });
         navigate(`/page/${id}`);
       } else {
-        const count = await importJSON(text);
+        let payload = text;
+        const parsed = JSON.parse(text);
+        if (isEncryptedEnvelope(parsed)) {
+          const pass = window.prompt('Sauvegarde chiffrée — entrez la passphrase :');
+          if (!pass) return;
+          payload = await decryptString(parsed, pass);
+        }
+        const count = await importJSON(payload);
         await init();
         await initDatabases();
         await useEntityStore.getState().init();
@@ -183,7 +192,7 @@ export function Sidebar() {
             <HelpCircle size={15} /> Guide
           </button>
         </div>
-        <div className="grid grid-cols-3 gap-1">
+        <div className="grid grid-cols-4 gap-1">
           <button
             type="button"
             onClick={() => void exportJSON()}
@@ -191,6 +200,17 @@ export function Sidebar() {
             title="Exporter en JSON (sauvegarde complète)"
           >
             <Download size={16} /> JSON
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const pass = window.prompt('Passphrase pour chiffrer la sauvegarde :');
+              if (pass) void exportEncryptedJSON(pass);
+            }}
+            className="flex flex-col items-center gap-1 rounded px-1 py-2 text-[11px] text-notion-muted hover:bg-notion-hover dark:hover:bg-notion-hover-dark"
+            title="Exporter une sauvegarde chiffrée (passphrase)"
+          >
+            <Lock size={16} /> Chiffré
           </button>
           <button
             type="button"
