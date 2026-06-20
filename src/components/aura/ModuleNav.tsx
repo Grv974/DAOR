@@ -3,6 +3,7 @@ import {
   CalendarDays,
   FolderKanban,
   LayoutDashboard,
+  Lightbulb,
   Network,
   NotebookPen,
   Target,
@@ -12,6 +13,7 @@ import {
 const MODULES = [
   { to: '/m/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/m/objectives', label: 'Objectifs', icon: Target },
+  { to: '/m/strategy', label: 'Stratégie', icon: Lightbulb },
   { to: '/m/projects', label: 'Projets', icon: FolderKanban },
   { to: '/m/crm', label: 'CRM', icon: Users },
   { to: '/m/opportunities', label: 'Opportunités', icon: CalendarDays },
