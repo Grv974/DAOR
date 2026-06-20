@@ -20,11 +20,13 @@ interface UIState {
   searchOpen: boolean;
   helpOpen: boolean;
   trashOpen: boolean;
+  captureOpen: boolean;
   toggleTheme: () => void;
   setSidebarOpen: (open: boolean) => void;
   setSearchOpen: (open: boolean) => void;
   setHelpOpen: (open: boolean) => void;
   setTrashOpen: (open: boolean) => void;
+  setCaptureOpen: (open: boolean) => void;
 }
 
 export const useUIStore = create<UIState>((set, get) => ({
@@ -33,6 +35,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   searchOpen: false,
   helpOpen: false,
   trashOpen: false,
+  captureOpen: false,
 
   toggleTheme() {
     const next: ThemeMode = get().theme === 'dark' ? 'light' : 'dark';
@@ -49,4 +52,5 @@ export const useUIStore = create<UIState>((set, get) => ({
   setSearchOpen: (open) => set({ searchOpen: open }),
   setHelpOpen: (open) => set({ helpOpen: open }),
   setTrashOpen: (open) => set({ trashOpen: open }),
+  setCaptureOpen: (open) => set({ captureOpen: open }),
 }));
