@@ -4,6 +4,7 @@ import {
   ChevronsLeft,
   Download,
   FileDown,
+  Github,
   HelpCircle,
   Lock,
   Plus,
@@ -35,7 +36,7 @@ export function Sidebar() {
   const init = useWorkspaceStore((s) => s.init);
   const createDatabase = useDatabaseStore((s) => s.createDatabase);
   const initDatabases = useDatabaseStore((s) => s.init);
-  const { setSidebarOpen, setSearchOpen, setHelpOpen, setTrashOpen, setCopilotOpen } = useUIStore();
+  const { setSidebarOpen, setSearchOpen, setHelpOpen, setTrashOpen, setCopilotOpen, setSyncOpen } = useUIStore();
 
   const favorites = Object.values(pages).filter((p) => p.favorite && !p.trashed);
 
@@ -174,11 +175,11 @@ export function Sidebar() {
       </div>
 
       <div className="border-t border-notion-border p-2 dark:border-notion-border-dark">
-        <div className="mb-1 grid grid-cols-2 gap-1">
+        <div className="mb-1 grid grid-cols-3 gap-1">
           <button
             type="button"
             onClick={() => setTrashOpen(true)}
-            className="flex items-center justify-center gap-1.5 rounded px-1 py-1.5 text-xs text-notion-muted hover:bg-notion-hover dark:hover:bg-notion-hover-dark"
+            className="flex items-center justify-center gap-1 rounded px-1 py-1.5 text-xs text-notion-muted hover:bg-notion-hover dark:hover:bg-notion-hover-dark"
             title="Corbeille"
           >
             <Trash2 size={15} /> Corbeille
@@ -186,10 +187,18 @@ export function Sidebar() {
           <button
             type="button"
             onClick={() => setHelpOpen(true)}
-            className="flex items-center justify-center gap-1.5 rounded px-1 py-1.5 text-xs text-notion-muted hover:bg-notion-hover dark:hover:bg-notion-hover-dark"
+            className="flex items-center justify-center gap-1 rounded px-1 py-1.5 text-xs text-notion-muted hover:bg-notion-hover dark:hover:bg-notion-hover-dark"
             title="Guide des fonctionnalités"
           >
             <HelpCircle size={15} /> Guide
+          </button>
+          <button
+            type="button"
+            onClick={() => setSyncOpen(true)}
+            className="flex items-center justify-center gap-1 rounded px-1 py-1.5 text-xs text-notion-muted hover:bg-notion-hover dark:hover:bg-notion-hover-dark"
+            title="Sauvegarde GitHub"
+          >
+            <Github size={15} /> Sync
           </button>
         </div>
         <div className="grid grid-cols-4 gap-1">
