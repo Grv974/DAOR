@@ -42,7 +42,7 @@ export function StrategyModule() {
 
   return (
     <div className="flex h-full">
-      <div className="flex w-64 shrink-0 flex-col border-r border-notion-border dark:border-notion-border-dark">
+      <div className={`${selected ? 'hidden md:flex' : 'flex'} w-full shrink-0 flex-col border-r border-notion-border md:w-64 dark:border-notion-border-dark`}>
         <h1 className="px-4 py-3 text-lg font-bold">Stratégie</h1>
         <div className="flex-1 overflow-y-auto px-2 pb-4">
           {objectives.length === 0 && <p className="px-2 text-sm text-notion-muted">Créez des objectifs pour bâtir leur plan d'action.</p>}
@@ -59,6 +59,7 @@ export function StrategyModule() {
       ) : (
         <div className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-3xl px-6 py-6">
+            <button onClick={() => setSelected(null)} className="mb-2 text-sm text-notion-muted hover:underline md:hidden">← Retour</button>
             <h2 className="mb-4 text-xl font-bold">{obj.title || 'Sans titre'} — Plan d'action</h2>
 
             <div className="grid gap-5 md:grid-cols-2">
