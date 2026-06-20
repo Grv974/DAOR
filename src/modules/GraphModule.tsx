@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Crosshair, Filter, Route, X } from 'lucide-react';
+import { Crosshair, Filter, Link2, Route, X } from 'lucide-react';
 import { useEntityStore } from '@/store/useEntityStore';
 import type { EntityType, RelationType } from '@/types/aura';
 import {
@@ -43,6 +43,10 @@ export function GraphModule() {
   const [pathMode, setPathMode] = useState(false);
   const [pathA, setPathA] = useState<string | null>(null);
   const [pathIds, setPathIds] = useState<string[]>([]);
+
+  // Touch-friendly link creation: tap source then target.
+  const [linkMode, setLinkMode] = useState(false);
+  const [linkSource, setLinkSource] = useState<string | null>(null);
 
   const [linkMenu, setLinkMenu] = useState<{ source: string; target: string; sx: number; sy: number } | null>(null);
 
@@ -285,6 +289,18 @@ export function GraphModule() {
   const recenter = () => { userMoved.current = true; fitView(); };
 
   const onNodeClick = (id: string) => {
+    if (linkMode) {
+      if (!linkSource) { setLinkSource(id); return; }
+      if (id !== linkSource) {
+        const rect = svgRef.current!.getBoundingClientRect();
+        const tp = posRef.current.get(id);
+        const sx = tp ? rect.left + transform.tx + tp.x * transform.k : rect.left + rect.width / 2;
+        const sy = tp ? rect.top + transform.ty + tp.y * transform.k : rect.top + rect.height / 2;
+        setLinkMenu({ source: linkSource, target: id, sx, sy });
+        setLinkSource(null);
+      }
+      return;
+    }
     if (pathMode) {
       if (!pathA) { setPathA(id); setPathIds([id]); }
       else { setPathIds(shortestPath(relations, pathA, id)); setPathA(null); }
@@ -343,7 +359,10 @@ export function GraphModule() {
           <button onClick={() => setShowFilters((v) => !v)} className="flex items-center gap-1 rounded-md border border-notion-border bg-white px-2 py-1 text-xs dark:border-notion-border-dark dark:bg-[#252525]">
             <Filter size={12} /> Filtres
           </button>
-          <button onClick={() => { setPathMode((v) => !v); setPathA(null); setPathIds([]); }} className={`flex items-center gap-1 rounded-md border px-2 py-1 text-xs ${pathMode ? 'border-notion-accent bg-notion-accent text-white' : 'border-notion-border bg-white dark:border-notion-border-dark dark:bg-[#252525]'}`}>
+          <button onClick={() => { setLinkMode((v) => !v); setLinkSource(null); setPathMode(false); }} className={`flex items-center gap-1 rounded-md border px-2 py-1 text-xs ${linkMode ? 'border-notion-accent bg-notion-accent text-white' : 'border-notion-border bg-white dark:border-notion-border-dark dark:bg-[#252525]'}`}>
+            <Link2 size={12} /> Lier
+          </button>
+          <button onClick={() => { setPathMode((v) => !v); setPathA(null); setPathIds([]); setLinkMode(false); }} className={`flex items-center gap-1 rounded-md border px-2 py-1 text-xs ${pathMode ? 'border-notion-accent bg-notion-accent text-white' : 'border-notion-border bg-white dark:border-notion-border-dark dark:bg-[#252525]'}`}>
             <Route size={12} /> Chemin
           </button>
           <button onClick={recenter} className="flex items-center gap-1 rounded-md border border-notion-border bg-white px-2 py-1 text-xs dark:border-notion-border-dark dark:bg-[#252525]">
@@ -357,7 +376,7 @@ export function GraphModule() {
             {GRAPH_TYPES.map((t) => (
               <label key={t.type} className="flex items-center gap-2 py-0.5">
                 <input type="checkbox" checked={visibleTypes.has(t.type)} onChange={(e) => setVisibleTypes((s) => { const n = new Set(s); e.target.checked ? n.add(t.type) : n.delete(t.type); return n; })} />
-                <span className="h-2.5 w-2.5 rounded-full" style={{ background: NODE_COLOR[t.type] }} /> {t.label}
+                <svg width="15" height="15" viewBox="-9 -9 18 18" className="shrink-0"><NodeShape type={t.type} r={7} fill={NODE_COLOR[t.type]} /></svg> {t.label}
               </label>
             ))}
             <div className="mb-1 mt-2 font-semibold">Liens</div>
@@ -445,9 +464,10 @@ export function GraphModule() {
               const isContact = n.type === 'contact';
               const score = isContact ? ((n.props.score as number) ?? 50) : 50;
               const radius = isContact ? 14 + (score / 100) * 8 : 16;
+              const photo = isContact ? (n.props.photo as string | undefined) : undefined;
               const hiddenType = !typeVisible(n.type);
               const faded = (neighborSet && !neighborSet.has(n.id)) || hiddenType || (pathIds.length > 0 && !pathIds.includes(n.id));
-              const isSel = selected === n.id;
+              const isSel = selected === n.id || linkSource === n.id;
               return (
                 <g
                   key={n.id}
@@ -466,15 +486,29 @@ export function GraphModule() {
                   }}
                   onClick={(e) => { e.stopPropagation(); onNodeClick(n.id); }}
                 >
-                  <circle r={radius + 4} fill={color} opacity={0.18} />
-                  <circle r={radius} fill={color} stroke={isSel ? '#111' : '#fff'} strokeWidth={isSel ? 2.5 : 1.5} />
+                  <NodeShape type={n.type} r={radius + 4} fill={color} opacity={0.18} />
+                  {photo ? (
+                    <>
+                      <clipPath id={`clip-${n.id}`}><circle r={radius - 1} /></clipPath>
+                      <image
+                        href={photo}
+                        x={-(radius - 1)} y={-(radius - 1)}
+                        width={2 * (radius - 1)} height={2 * (radius - 1)}
+                        clipPath={`url(#clip-${n.id})`}
+                        preserveAspectRatio="xMidYMid slice"
+                      />
+                      <circle r={radius} fill="none" stroke={isSel ? '#111' : color} strokeWidth={isSel ? 3 : 2} />
+                    </>
+                  ) : (
+                    <NodeShape type={n.type} r={radius} fill={color} stroke={isSel ? '#111' : '#fff'} strokeWidth={isSel ? 2.5 : 1.5} />
+                  )}
                   <text textAnchor="middle" dy={radius + 12} fontSize={11} fill="currentColor" className="select-none">
                     {(n.title || 'Sans titre').slice(0, 22)}
                   </text>
-                  {/* Link handle */}
-                  {(hovered === n.id || isSel) && (
+                  {/* Link handle (mouse): drag to another node */}
+                  {(hovered === n.id || isSel) && !linkMode && (
                     <circle
-                      r={6} cx={radius} cy={-radius} fill="#2383e2" stroke="#fff" strokeWidth={1.5}
+                      r={7} cx={radius} cy={-radius} fill="#2383e2" stroke="#fff" strokeWidth={1.5}
                       style={{ cursor: 'crosshair' }}
                       onPointerDown={(e) => { e.stopPropagation(); linkDrag.current = { source: n.id, x: p.x, y: p.y }; }}
                     />
@@ -498,6 +532,12 @@ export function GraphModule() {
         {pathMode && (
           <div className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-notion-accent px-3 py-1 text-xs text-white">
             {pathA ? 'Cliquez le nœud cible…' : pathIds.length > 1 ? `Chemin : ${pathIds.length - 1} saut(s)` : 'Cliquez le nœud de départ'}
+          </div>
+        )}
+
+        {linkMode && (
+          <div className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-notion-accent px-4 py-1.5 text-xs text-white shadow-lg">
+            {linkSource ? 'Touchez le nœud à relier…' : 'Touchez le premier nœud à relier'}
           </div>
         )}
 
@@ -547,4 +587,54 @@ export function GraphModule() {
       )}
     </div>
   );
+}
+
+function hexagonPoints(r: number): string {
+  return Array.from({ length: 6 }, (_, i) => {
+    const a = ((-90 + 60 * i) * Math.PI) / 180;
+    return `${(r * Math.cos(a)).toFixed(1)},${(r * Math.sin(a)).toFixed(1)}`;
+  }).join(' ');
+}
+
+function starPoints(r: number): string {
+  const pts: string[] = [];
+  for (let i = 0; i < 10; i++) {
+    const rr = i % 2 === 0 ? r : r * 0.45;
+    const a = ((-90 + 36 * i) * Math.PI) / 180;
+    pts.push(`${(rr * Math.cos(a)).toFixed(1)},${(rr * Math.sin(a)).toFixed(1)}`);
+  }
+  return pts.join(' ');
+}
+
+/** Distinct node silhouette per entity type. */
+function NodeShape({
+  type,
+  r,
+  fill,
+  stroke,
+  strokeWidth,
+  opacity,
+}: {
+  type: EntityType;
+  r: number;
+  fill: string;
+  stroke?: string;
+  strokeWidth?: number;
+  opacity?: number;
+}) {
+  const common = { fill, stroke, strokeWidth, opacity, strokeLinejoin: 'round' as const };
+  switch (type) {
+    case 'company':
+      return <rect x={-r} y={-r} width={2 * r} height={2 * r} rx={3} {...common} />;
+    case 'project':
+      return <rect x={-r * 1.2} y={-r * 0.82} width={2.4 * r} height={1.64 * r} rx={5} {...common} />;
+    case 'opportunity':
+      return <polygon points={`0,${-r} ${r},0 0,${r} ${-r},0`} {...common} />;
+    case 'objective':
+      return <polygon points={hexagonPoints(r)} {...common} />;
+    case 'vision':
+      return <polygon points={starPoints(r)} {...common} />;
+    default:
+      return <circle r={r} {...common} />;
+  }
 }
