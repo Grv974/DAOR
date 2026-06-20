@@ -8,6 +8,7 @@ import {
   PROXIMITY_ORDER,
 } from '@/types/aura';
 import { daysSince, isOverdueCadence, relationalScore, scoreDots } from '@/lib/aura/crm';
+import { TimeMachine } from '@/components/aura/TimeMachine';
 
 const INTERACTION_KINDS: { id: Interaction['kind']; label: string }[] = [
   { id: 'call', label: 'Appel' },
@@ -246,6 +247,10 @@ function ContactCard({ contactId, onClose }: { contactId: string; onClose: () =>
               </div>
             ))
           )}
+        </Section>
+
+        <Section title="Time-machine relationnelle">
+          <TimeMachine contactId={contactId} />
         </Section>
 
         <F t="Notes libres">

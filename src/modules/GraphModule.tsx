@@ -61,6 +61,29 @@ export function GraphModule() {
   const transformRef = useRef(transform);
   transformRef.current = transform;
 
+  // Measure the viewport so we can center content (graph origin is 0,0) and
+  // place the mini-map, instead of pinning everything to the top-left corner.
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  const centered = useRef(false);
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      setSize({ w: r.width, h: r.height });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  useEffect(() => {
+    if (!centered.current && size.w > 0) {
+      centered.current = true;
+      setTransform((tf) => ({ ...tf, tx: size.w / 2, ty: size.h / 2 }));
+    }
+  }, [size]);
+
   // Initialise / reconcile node positions.
   useEffect(() => {
     const pos = posRef.current;
@@ -212,7 +235,7 @@ export function GraphModule() {
     });
   };
 
-  const recenter = () => setTransform({ k: 1, tx: 0, ty: 0 });
+  const recenter = () => setTransform({ k: 1, tx: size.w / 2, ty: size.h / 2 });
 
   const onNodeClick = (id: string) => {
     if (pathMode) {
@@ -397,8 +420,8 @@ export function GraphModule() {
             })}
           </g>
 
-          {/* Mini-map */}
-          <g transform="translate(12, 12)">
+          {/* Mini-map (bottom-right) */}
+          <g transform={`translate(${Math.max(12, size.w - 132)}, ${Math.max(12, size.h - 92)})`}>
             <rect width={120} height={80} fill="rgba(127,127,127,0.08)" stroke="rgba(127,127,127,0.3)" rx={4} />
             {allPos.map((p, i) => {
               const mx = ((p.x - minX) / (maxX - minX || 1)) * 116 + 2;
