@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CalendarClock, Compass, GripVertical, Pencil, Plus, Send, Target, Users, Wallet, X } from 'lucide-react';
 import { useEntityStore } from '@/store/useEntityStore';
@@ -104,16 +104,36 @@ export function DashboardModule() {
   const visible = config.order.filter((id) => WIDGETS[id] && !config.hidden.includes(id));
   const hiddenAvailable = Object.keys(WIDGETS).filter((id) => !visible.includes(id));
 
-  const reorder = (target: string) => {
-    if (!dragId || dragId === target) return;
-    const order = [...config.order];
-    const from = order.indexOf(dragId);
-    const to = order.indexOf(target);
-    order.splice(from, 1);
-    order.splice(to, 0, dragId);
-    update({ ...config, order });
-    setDragId(null);
-  };
+  // Pointer-based reordering (works with mouse, touch and pen). While a widget
+  // is being dragged, we live-reorder whenever the pointer is over another card.
+  useEffect(() => {
+    if (!dragId) return;
+    const onMove = (e: PointerEvent) => {
+      const card = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest('[data-wid]') as HTMLElement | null;
+      const target = card?.dataset.wid;
+      if (!target || target === dragId) return;
+      setConfig((cfg) => {
+        const order = [...cfg.order];
+        const from = order.indexOf(dragId);
+        const to = order.indexOf(target);
+        if (from === -1 || to === -1) return cfg;
+        order.splice(from, 1);
+        order.splice(to, 0, dragId);
+        const next = { ...cfg, order };
+        saveConfig(next);
+        return next;
+      });
+    };
+    const onUp = () => setDragId(null);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, [dragId]);
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir';
@@ -147,14 +167,20 @@ export function DashboardModule() {
             return (
               <div
                 key={id}
-                draggable={editMode}
-                onDragStart={(e) => { if (editMode) { setDragId(id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); } }}
-                onDragOver={(e) => editMode && e.preventDefault()}
-                onDrop={() => reorder(id)}
-                className={`rounded-xl border border-notion-border bg-white p-4 shadow-sm dark:border-notion-border-dark dark:bg-[#202020] ${editMode ? 'cursor-grab ring-1 ring-dashed ring-notion-border' : ''}`}
+                data-wid={id}
+                className={`rounded-xl border border-notion-border bg-white p-4 shadow-sm dark:border-notion-border-dark dark:bg-[#202020] ${editMode ? 'ring-1 ring-dashed ring-notion-border' : ''} ${dragId === id ? 'opacity-50' : ''}`}
               >
                 <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
-                  {editMode && <GripVertical size={14} className="text-notion-muted" />}
+                  {editMode && (
+                    <span
+                      onPointerDown={(e) => { e.preventDefault(); setDragId(id); }}
+                      style={{ touchAction: 'none' }}
+                      className="-m-1 cursor-grab touch-none p-1 text-notion-muted active:cursor-grabbing"
+                      title="Glisser pour réorganiser"
+                    >
+                      <GripVertical size={16} />
+                    </span>
+                  )}
                   {w.icon} {w.title}
                   {editMode && (
                     <button onClick={() => update({ ...config, hidden: [...config.hidden, id] })} className="ml-auto text-notion-muted hover:text-red-600"><X size={14} /></button>
