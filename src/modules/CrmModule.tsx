@@ -9,6 +9,7 @@ import {
 } from '@/types/aura';
 import { daysSince, isOverdueCadence, relationalScore, scoreDots } from '@/lib/aura/crm';
 import { TimeMachine } from '@/components/aura/TimeMachine';
+import { imageToDataUrl } from '@/lib/image';
 
 const INTERACTION_KINDS: { id: Interaction['kind']; label: string }[] = [
   { id: 'call', label: 'Appel' },
@@ -71,9 +72,13 @@ export function CrmModule() {
                 onClick={() => setSelected(c.id)}
                 className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm ${selected === c.id ? 'bg-notion-hover dark:bg-notion-hover-dark' : 'hover:bg-notion-hover dark:hover:bg-notion-hover-dark'}`}
               >
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold text-blue-700 dark:bg-blue-900 dark:text-blue-200">
-                  {(c.title || '?').slice(0, 1).toUpperCase()}
-                </span>
+                {c.props.photo ? (
+                  <img src={c.props.photo as string} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover" />
+                ) : (
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold text-blue-700 dark:bg-blue-900 dark:text-blue-200">
+                    {(c.title || '?').slice(0, 1).toUpperCase()}
+                  </span>
+                )}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate">{c.title || 'Sans nom'}</span>
                   <span className="block truncate text-xs text-notion-muted">{(c.props.role as string) || (c.props.company as string) || ''}</span>
@@ -131,9 +136,36 @@ function ContactCard({ contactId, onClose }: { contactId: string; onClose: () =>
     <div className="flex-1 overflow-y-auto">
       <div className="mx-auto max-w-2xl px-6 py-5">
         <div className="mb-4 flex items-start gap-3">
-          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 text-lg font-bold text-blue-700 dark:bg-blue-900 dark:text-blue-200">
-            {(c.title || '?').slice(0, 1).toUpperCase()}
-          </span>
+          <div className="group relative h-12 w-12 shrink-0">
+            <label className="block h-12 w-12 cursor-pointer overflow-hidden rounded-full" title="Changer la photo">
+              {p.photo ? (
+                <img src={p.photo as string} alt="" className="h-12 w-12 rounded-full object-cover" />
+              ) : (
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 text-lg font-bold text-blue-700 dark:bg-blue-900 dark:text-blue-200">
+                  {(c.title || '?').slice(0, 1).toUpperCase()}
+                </span>
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  if (f) { try { updateProps(contactId, { photo: await imageToDataUrl(f) }); } catch { /* ignore */ } }
+                  e.target.value = '';
+                }}
+              />
+            </label>
+            {p.photo != null && p.photo !== '' && (
+              <button
+                onClick={() => updateProps(contactId, { photo: '' })}
+                className="absolute -right-1 -top-1 hidden h-5 w-5 items-center justify-center rounded-full bg-white text-notion-muted shadow group-hover:flex hover:text-red-600 dark:bg-[#333]"
+                title="Retirer la photo"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
           <div className="min-w-0 flex-1">
             <input value={c.title} onChange={(e) => updateEntity(contactId, { title: e.target.value })} placeholder="Nom Prénom" className="w-full bg-transparent text-xl font-bold outline-none" />
             <div className="flex items-center gap-2 text-xs text-notion-muted">

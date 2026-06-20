@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import { Sidebar } from '@/components/Sidebar';
@@ -10,6 +10,7 @@ import { TrashModal } from '@/components/TrashModal';
 import { QuickCapture } from '@/components/aura/QuickCapture';
 import { Copilot } from '@/components/aura/Copilot';
 import { GitSyncModal } from '@/components/aura/GitSyncModal';
+import { isUnlocked, LockScreen } from '@/components/LockScreen';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useDatabaseStore } from '@/store/useDatabaseStore';
 import { useEntityStore } from '@/store/useEntityStore';
@@ -47,6 +48,7 @@ function PageRoute() {
 }
 
 export default function App() {
+  const [unlocked, setUnlocked] = useState(isUnlocked);
   const init = useWorkspaceStore((s) => s.init);
   const initDatabases = useDatabaseStore((s) => s.init);
   const initEntities = useEntityStore((s) => s.init);
@@ -109,6 +111,10 @@ export default function App() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [setSearchOpen, setCaptureOpen, setSidebarOpen, navigate]);
+
+  if (!unlocked) {
+    return <LockScreen onUnlock={() => setUnlocked(true)} />;
+  }
 
   if (!loaded) {
     return (
