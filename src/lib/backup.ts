@@ -5,7 +5,31 @@ import { tiptapToMarkdown } from '@/lib/markdown';
 import { createZip } from '@/lib/zip';
 import { encryptString } from '@/lib/crypto';
 
-const BACKUP_VERSION = 2;
+const BACKUP_VERSION = 3;
+
+// localStorage keys holding NON-secret, exportable preferences/structure.
+// Secrets (Anthropic key, GitHub PAT) and the access passcode are deliberately
+// NOT exported.
+const ROOT_ORDER_KEY = 'daor:rootOrder';
+const DASHBOARD_KEY = 'daor:dashboard';
+const THEME_KEY = 'daor:theme';
+
+function readJSON<T>(key: string): T | undefined {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeJSON(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* ignore */
+  }
+}
 
 interface SerializedFile {
   id: string;
@@ -27,6 +51,9 @@ interface BackupFile {
   relations?: Relation[];
   commitments?: Commitment[];
   interactions?: Interaction[];
+  // Non-secret UI structure / preferences.
+  rootOrder?: string[];
+  settings?: { dashboard?: unknown; theme?: string };
 }
 
 export function downloadBlob(blob: Blob, filename: string): void {
@@ -90,6 +117,13 @@ export async function buildBackupString(): Promise<string> {
     relations,
     commitments,
     interactions,
+    rootOrder: readJSON<string[]>(ROOT_ORDER_KEY),
+    settings: {
+      dashboard: readJSON<unknown>(DASHBOARD_KEY),
+      theme: (() => {
+        try { return localStorage.getItem(THEME_KEY) ?? undefined; } catch { return undefined; }
+      })(),
+    },
   };
   return JSON.stringify(backup, null, 2);
 }
@@ -142,6 +176,15 @@ export async function importJSON(text: string): Promise<number> {
       if (Array.isArray(data.interactions)) await db.interactions.bulkPut(data.interactions);
     },
   );
+
+  // Restore non-secret UI structure / preferences (the workspace store will
+  // reconcile rootOrder against the pages that actually exist on next init()).
+  if (Array.isArray(data.rootOrder)) writeJSON(ROOT_ORDER_KEY, data.rootOrder);
+  if (data.settings?.dashboard) writeJSON(DASHBOARD_KEY, data.settings.dashboard);
+  if (data.settings?.theme) {
+    try { localStorage.setItem(THEME_KEY, data.settings.theme); } catch { /* ignore */ }
+  }
+
   return data.pages.length;
 }
 
