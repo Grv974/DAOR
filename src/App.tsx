@@ -8,6 +8,7 @@ import { CommandPalette } from '@/components/CommandPalette';
 import { HelpGuide } from '@/components/HelpGuide';
 import { TrashModal } from '@/components/TrashModal';
 import { QuickCapture } from '@/components/aura/QuickCapture';
+import { Copilot } from '@/components/aura/Copilot';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useDatabaseStore } from '@/store/useDatabaseStore';
 import { useEntityStore } from '@/store/useEntityStore';
@@ -144,6 +145,7 @@ export default function App() {
       <HelpGuide />
       <TrashModal />
       <QuickCapture />
+      <Copilot />
     </div>
   );
 }

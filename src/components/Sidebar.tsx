@@ -7,6 +7,7 @@ import {
   HelpCircle,
   Plus,
   Search,
+  Sparkles,
   Star,
   Table2,
   Trash2,
@@ -32,7 +33,7 @@ export function Sidebar() {
   const init = useWorkspaceStore((s) => s.init);
   const createDatabase = useDatabaseStore((s) => s.createDatabase);
   const initDatabases = useDatabaseStore((s) => s.init);
-  const { setSidebarOpen, setSearchOpen, setHelpOpen, setTrashOpen } = useUIStore();
+  const { setSidebarOpen, setSearchOpen, setHelpOpen, setTrashOpen, setCopilotOpen } = useUIStore();
 
   const favorites = Object.values(pages).filter((p) => p.favorite && !p.trashed);
 
@@ -103,6 +104,13 @@ export function Sidebar() {
           className="mb-1 flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-notion-muted hover:bg-notion-hover dark:hover:bg-notion-hover-dark"
         >
           <Search size={16} /> Rechercher
+        </button>
+        <button
+          type="button"
+          onClick={() => setCopilotOpen(true)}
+          className="mb-1 flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm font-medium text-notion-accent hover:bg-notion-hover dark:hover:bg-notion-hover-dark"
+        >
+          <Sparkles size={16} /> Copilote IA
         </button>
       </div>
 
