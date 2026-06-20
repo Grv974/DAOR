@@ -18,6 +18,7 @@ import { searchIndex } from '@/lib/searchIndex';
 // AURA modules — lazy-loaded (code-splitting per the spec's perf targets).
 const DashboardModule = lazy(() => import('@/modules/DashboardModule').then((m) => ({ default: m.DashboardModule })));
 const ObjectivesModule = lazy(() => import('@/modules/ObjectivesModule').then((m) => ({ default: m.ObjectivesModule })));
+const StrategyModule = lazy(() => import('@/modules/StrategyModule').then((m) => ({ default: m.StrategyModule })));
 const CrmModule = lazy(() => import('@/modules/CrmModule').then((m) => ({ default: m.CrmModule })));
 const OpportunitiesModule = lazy(() =>
   import('@/modules/OpportunitiesModule').then((m) => ({ default: m.OpportunitiesModule })),
@@ -105,6 +106,7 @@ export default function App() {
             <Route path="/" element={<Navigate to="/m/dashboard" replace />} />
             <Route path="/m/dashboard" element={<DashboardModule />} />
             <Route path="/m/objectives" element={<ObjectivesModule />} />
+            <Route path="/m/strategy" element={<StrategyModule />} />
             <Route path="/m/projects" element={<ProjectsModule />} />
             <Route path="/m/crm" element={<CrmModule />} />
             <Route path="/m/opportunities" element={<OpportunitiesModule />} />
