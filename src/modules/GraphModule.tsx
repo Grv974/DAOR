@@ -67,6 +67,7 @@ export function GraphModule() {
   // place the mini-map, instead of pinning everything to the top-left corner.
   const [size, setSize] = useState({ w: 0, h: 0 });
   const centered = useRef(false);
+  const userMoved = useRef(false);
   useEffect(() => {
     const el = svgRef.current;
     if (!el) return;
@@ -79,11 +80,32 @@ export function GraphModule() {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  // Frame all nodes within the viewport (fit-to-content).
+  const fitView = () => {
+    if (size.w === 0) return;
+    const pts = [...posRef.current.values()];
+    if (pts.length === 0) { setTransform({ k: 1, tx: size.w / 2, ty: size.h / 2 }); return; }
+    const xs = pts.map((p) => p.x);
+    const ys = pts.map((p) => p.y);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const pad = 100;
+    const k = Math.max(0.2, Math.min(2, Math.min((size.w - pad) / ((maxX - minX) || 1), (size.h - pad) / ((maxY - minY) || 1))));
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    setTransform({ k, tx: size.w / 2 - cx * k, ty: size.h / 2 - cy * k });
+  };
+
+  // Auto-fit on first display; re-fit once after the force layout settles
+  // (unless the user has already panned/zoomed).
   useEffect(() => {
-    if (!centered.current && size.w > 0) {
-      centered.current = true;
-      setTransform((tf) => ({ ...tf, tx: size.w / 2, ty: size.h / 2 }));
-    }
+    if (centered.current || size.w === 0) return;
+    centered.current = true;
+    fitView();
+    const t = setTimeout(() => { if (!userMoved.current) fitView(); }, 1300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [size]);
 
   // Initialise / reconcile node positions.
@@ -249,6 +271,7 @@ export function GraphModule() {
   }, [updateProps]);
 
   const onWheel = (e: React.WheelEvent) => {
+    userMoved.current = true;
     const rect = svgRef.current!.getBoundingClientRect();
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
@@ -259,7 +282,7 @@ export function GraphModule() {
     });
   };
 
-  const recenter = () => setTransform({ k: 1, tx: size.w / 2, ty: size.h / 2 });
+  const recenter = () => { userMoved.current = true; fitView(); };
 
   const onNodeClick = (id: string) => {
     if (pathMode) {
@@ -361,6 +384,7 @@ export function GraphModule() {
           onWheel={onWheel}
           onPointerDown={(e) => {
             if (e.target !== svgRef.current) return;
+            userMoved.current = true;
             const rect = svgRef.current.getBoundingClientRect();
             bgPointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
             if (bgPointers.current.size === 2) {
@@ -434,6 +458,7 @@ export function GraphModule() {
                   onMouseLeave={() => setHovered(null)}
                   onPointerDown={(e) => {
                     e.stopPropagation();
+                    userMoved.current = true;
                     const rect = svgRef.current!.getBoundingClientRect();
                     const gx = (e.clientX - rect.left - tx) / k;
                     const gy = (e.clientY - rect.top - ty) / k;
