@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link2, Search, Send } from 'lucide-react';
+import { Link2, Search, Send, Trash2 } from 'lucide-react';
 import { useEntityStore } from '@/store/useEntityStore';
 import type { Entity, JournalKind } from '@/types/aura';
 
@@ -19,6 +19,7 @@ export function JournalModule() {
   const relations = useEntityStore((s) => s.relations);
   const createEntity = useEntityStore((s) => s.createEntity);
   const addRelation = useEntityStore((s) => s.addRelation);
+  const deleteEntity = useEntityStore((s) => s.deleteEntity);
   const [text, setText] = useState('');
   const [kind, setKind] = useState<JournalKind>('note');
   const [query, setQuery] = useState('');
@@ -96,9 +97,9 @@ export function JournalModule() {
             onKeyDown={(e) => {
               if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') save();
             }}
-            rows={3}
+            rows={8}
             placeholder="Quoi de neuf ? Mentionnez @contacts, #projets, objectifs… (Cmd/Ctrl+Entrée)"
-            className="w-full resize-y bg-transparent text-sm outline-none"
+            className="min-h-[10rem] w-full resize-y bg-transparent text-sm leading-relaxed outline-none"
           />
           <div className="flex items-center justify-between">
             <span className="text-xs text-notion-muted">Les @mentions sont reliées automatiquement.</span>
@@ -120,7 +121,12 @@ export function JournalModule() {
         ) : (
           <div className="space-y-3">
             {filtered.map((e) => (
-              <JournalEntry key={e.id} entry={e} links={relations.filter((r) => r.source === e.id && r.type === 'link').map((r) => entities[r.target]).filter(Boolean)} />
+              <JournalEntry
+                key={e.id}
+                entry={e}
+                links={relations.filter((r) => r.source === e.id && r.type === 'link').map((r) => entities[r.target]).filter(Boolean)}
+                onDelete={() => { if (window.confirm('Supprimer cette note ?')) void deleteEntity(e.id); }}
+              />
             ))}
           </div>
         )}
@@ -129,13 +135,20 @@ export function JournalModule() {
   );
 }
 
-function JournalEntry({ entry, links }: { entry: Entity; links: Entity[] }) {
+function JournalEntry({ entry, links, onDelete }: { entry: Entity; links: Entity[]; onDelete: () => void }) {
   const kindLabel = KINDS.find((k) => k.id === entry.props.kind)?.label ?? 'Note';
   return (
-    <div className="rounded-lg border border-notion-border bg-white p-3 shadow-sm dark:border-notion-border-dark dark:bg-[#202020]">
+    <div className="group rounded-lg border border-notion-border bg-white p-3 shadow-sm dark:border-notion-border-dark dark:bg-[#202020]">
       <div className="mb-1 flex items-center gap-2 text-xs text-notion-muted">
         <span className="rounded bg-notion-hover px-1.5 py-0.5 dark:bg-notion-hover-dark">{kindLabel}</span>
         <span>{entry.props.date as string}</span>
+        <button
+          onClick={onDelete}
+          className="ml-auto rounded p-1 text-notion-muted opacity-60 hover:bg-notion-hover hover:text-red-600 group-hover:opacity-100 dark:hover:bg-notion-hover-dark"
+          title="Supprimer la note"
+        >
+          <Trash2 size={14} />
+        </button>
       </div>
       <div className="whitespace-pre-wrap text-sm">{entry.props.text as string}</div>
       {links.length > 0 && (

@@ -13,6 +13,13 @@ body,
   height: 100%;
 }
 
+/* Prevent the browser pull-to-refresh / overscroll bounce (notably the page
+   reload when dragging the graph board on iPad Safari). */
+html,
+body {
+  overscroll-behavior: none;
+}
+
 body {
   margin: 0;
   font-family: var(--daor-font);
