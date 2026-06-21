@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Crosshair, Filter, Link2, Route, X } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Crosshair, Filter, Link2, Maximize2, Minus, Plus, Route, X } from 'lucide-react';
 import { useEntityStore } from '@/store/useEntityStore';
 import type { EntityType, RelationType } from '@/types/aura';
 import {
@@ -33,7 +33,7 @@ export function GraphModule() {
   const rerender = () => setTick((t) => (t + 1) % 1_000_000);
 
   const [transform, setTransform] = useState({ k: 1, tx: 0, ty: 0 });
-  const [layout, setLayout] = useState<Layout>('force');
+  const [layout, setLayout] = useState<Layout>('free');
   const [visibleTypes, setVisibleTypes] = useState<Set<EntityType>>(new Set(GRAPH_TYPES.map((t) => t.type)));
   const [visibleLinks, setVisibleLinks] = useState<Set<RelationType>>(new Set([...LINKABLE_TYPES, 'worksAt', 'opportunity']));
   const [showFilters, setShowFilters] = useState(false);
@@ -95,7 +95,7 @@ export function GraphModule() {
     const minX = Math.min(...xs), maxX = Math.max(...xs);
     const minY = Math.min(...ys), maxY = Math.max(...ys);
     const pad = 100;
-    const k = Math.max(0.2, Math.min(2, Math.min((size.w - pad) / ((maxX - minX) || 1), (size.h - pad) / ((maxY - minY) || 1))));
+    const k = Math.max(0.1, Math.min(2, Math.min((size.w - pad) / ((maxX - minX) || 1), (size.h - pad) / ((maxY - minY) || 1))));
     const cx = (minX + maxX) / 2;
     const cy = (minY + maxY) / 2;
     setTransform({ k, tx: size.w / 2 - cx * k, ty: size.h / 2 - cy * k });
@@ -121,7 +121,7 @@ export function GraphModule() {
         const px = n.props.x as number | undefined;
         const py = n.props.y as number | undefined;
         const angle = i * 2.399;
-        const r = 60 + i * 12;
+        const r = 90 + i * 24;
         pos.set(n.id, {
           x: typeof px === 'number' ? px : Math.cos(angle) * r,
           y: typeof py === 'number' ? py : Math.sin(angle) * r,
@@ -192,19 +192,24 @@ export function GraphModule() {
     return () => cancelAnimationFrame(raf);
   }, [layout, relations, nodeIds]);
 
-  // Radial layout (one-shot arrangement).
+  // Radial "auto-arrange" — one-shot spread, then persist the positions so
+  // they survive in manual mode.
   useEffect(() => {
     if (layout !== 'radial') return;
     const pos = posRef.current;
     const arr = [...pos.keys()];
+    const ring = Math.max(1, Math.ceil(arr.length / 14));
     arr.forEach((id, i) => {
-      const a = (i / arr.length) * Math.PI * 2;
-      const r = 60 + (i % 3) * 80;
+      const a = (i / arr.length) * Math.PI * 2 * ring;
+      const r = 120 + (i % ring) * 150 + Math.floor(i / ring) * 18;
       const n = pos.get(id)!;
       n.x = Math.cos(a) * r;
       n.y = Math.sin(a) * r;
+      updateProps(id, { x: Math.round(n.x), y: Math.round(n.y) });
     });
     rerender();
+    fitView();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layout]);
 
   // Window-level pointer handlers for drag / pan / link-drag / pinch-zoom.
@@ -221,7 +226,7 @@ export function GraphModule() {
       if (pinch.current && bgPointers.current.size >= 2) {
         const [p1, p2] = [...bgPointers.current.values()];
         const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y) || 1;
-        const k = Math.max(0.2, Math.min(3, pinch.current.k * (dist / pinch.current.dist)));
+        const k = Math.max(0.1, Math.min(4, pinch.current.k * (dist / pinch.current.dist)));
         const r = k / pinch.current.k;
         setTransform({
           k,
@@ -280,13 +285,29 @@ export function GraphModule() {
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
     setTransform((tf) => {
-      const k = Math.max(0.2, Math.min(3, tf.k * (e.deltaY < 0 ? 1.1 : 0.9)));
+      const k = Math.max(0.1, Math.min(4, tf.k * (e.deltaY < 0 ? 1.1 : 0.9)));
       const ratio = k / tf.k;
       return { k, tx: mx - (mx - tf.tx) * ratio, ty: my - (my - tf.ty) * ratio };
     });
   };
 
   const recenter = () => { userMoved.current = true; fitView(); };
+
+  // On-screen navigation (no dragging — avoids Safari pull-to-refresh on iPad).
+  const panBy = (dx: number, dy: number) => {
+    userMoved.current = true;
+    setTransform((tf) => ({ ...tf, tx: tf.tx + dx, ty: tf.ty + dy }));
+  };
+  const zoomBy = (factor: number) => {
+    userMoved.current = true;
+    setTransform((tf) => {
+      const k = Math.max(0.1, Math.min(4, tf.k * factor));
+      const r = k / tf.k;
+      const cx = size.w / 2;
+      const cy = size.h / 2;
+      return { k, tx: cx - (cx - tf.tx) * r, ty: cy - (cy - tf.ty) * r };
+    });
+  };
 
   const onNodeClick = (id: string) => {
     if (linkMode) {
@@ -310,7 +331,7 @@ export function GraphModule() {
   };
 
   // Visibility helpers (hidden → faded, not removed).
-  const typeVisible = (t: EntityType) => visibleTypes.has(t);
+  const typeVisible = (t: EntityType | undefined) => !!t && visibleTypes.has(t);
   const neighborSet = useMemo(() => {
     if (!hovered) return null;
     const set = new Set<string>([hovered]);
@@ -325,7 +346,12 @@ export function GraphModule() {
   for (let i = 0; i < pathIds.length - 1; i++) pathEdgeKey.add([pathIds[i], pathIds[i + 1]].sort().join('|'));
 
   const visibleRelations = relations.filter(
-    (r) => posRef.current.has(r.source) && posRef.current.has(r.target) && visibleLinks.has(r.type),
+    (r) =>
+      posRef.current.has(r.source) &&
+      posRef.current.has(r.target) &&
+      visibleLinks.has(r.type) &&
+      typeVisible(entities[r.source]?.type) &&
+      typeVisible(entities[r.target]?.type),
   );
 
   const sel = selected ? entities[selected] : undefined;
@@ -344,7 +370,7 @@ export function GraphModule() {
       <div className="relative flex-1 overflow-hidden">
         {/* Toolbar */}
         <div className="absolute left-3 top-3 z-10 flex flex-wrap items-center gap-1">
-          {(['force', 'free', 'radial'] as Layout[]).map((l) => (
+          {(['free', 'radial'] as Layout[]).map((l) => (
             <button
               key={l}
               onClick={() => {
@@ -353,7 +379,7 @@ export function GraphModule() {
               }}
               className={`rounded-md border px-2 py-1 text-xs ${layout === l ? 'border-notion-accent bg-notion-accent text-white' : 'border-notion-border bg-white dark:border-notion-border-dark dark:bg-[#252525]'}`}
             >
-              {l === 'force' ? 'Libre (auto)' : l === 'free' ? 'Manuel' : 'Radial'}
+              {l === 'free' ? 'Manuel' : 'Disposer'}
             </button>
           ))}
           <button onClick={() => setShowFilters((v) => !v)} className="flex items-center gap-1 rounded-md border border-notion-border bg-white px-2 py-1 text-xs dark:border-notion-border-dark dark:bg-[#252525]">
@@ -465,8 +491,8 @@ export function GraphModule() {
               const score = isContact ? ((n.props.score as number) ?? 50) : 50;
               const radius = isContact ? 14 + (score / 100) * 8 : 16;
               const photo = isContact ? (n.props.photo as string | undefined) : undefined;
-              const hiddenType = !typeVisible(n.type);
-              const faded = (neighborSet && !neighborSet.has(n.id)) || hiddenType || (pathIds.length > 0 && !pathIds.includes(n.id));
+              if (!typeVisible(n.type)) return null; // hidden by the type filter
+              const faded = (neighborSet && !neighborSet.has(n.id)) || (pathIds.length > 0 && !pathIds.includes(n.id));
               const isSel = selected === n.id || linkSource === n.id;
               return (
                 <g
@@ -540,6 +566,25 @@ export function GraphModule() {
             {linkSource ? 'Touchez le nœud à relier…' : 'Touchez le premier nœud à relier'}
           </div>
         )}
+
+        {/* On-screen navigation pad (move without dragging) */}
+        <div className="absolute bottom-3 left-3 z-10 select-none">
+          <div className="mb-1 flex w-9 flex-col overflow-hidden rounded-md border border-notion-border bg-white shadow-sm dark:border-notion-border-dark dark:bg-[#252525]">
+            <button onClick={() => zoomBy(1.25)} className={ctrlBtn} title="Zoom avant"><Plus size={16} /></button>
+            <button onClick={() => zoomBy(0.8)} className={ctrlBtn} title="Zoom arrière"><Minus size={16} /></button>
+          </div>
+          <div className="grid grid-cols-3 grid-rows-3 gap-0.5">
+            <span />
+            <button onClick={() => panBy(0, 160)} className={padBtn} title="Déplacer vers le haut"><ChevronUp size={16} /></button>
+            <span />
+            <button onClick={() => panBy(160, 0)} className={padBtn} title="Déplacer vers la gauche"><ChevronLeft size={16} /></button>
+            <button onClick={recenter} className={padBtn} title="Cadrer tout"><Maximize2 size={14} /></button>
+            <button onClick={() => panBy(-160, 0)} className={padBtn} title="Déplacer vers la droite"><ChevronRight size={16} /></button>
+            <span />
+            <button onClick={() => panBy(0, -160)} className={padBtn} title="Déplacer vers le bas"><ChevronDown size={16} /></button>
+            <span />
+          </div>
+        </div>
 
         {/* Link-type context menu */}
         {linkMenu && (
@@ -638,3 +683,8 @@ function NodeShape({
       return <circle r={r} {...common} />;
   }
 }
+
+const ctrlBtn =
+  'flex h-9 w-9 items-center justify-center text-notion-muted hover:bg-notion-hover dark:hover:bg-notion-hover-dark';
+const padBtn =
+  'flex h-9 w-9 items-center justify-center rounded-md border border-notion-border bg-white text-notion-muted shadow-sm hover:bg-notion-hover active:bg-notion-accent active:text-white dark:border-notion-border-dark dark:bg-[#252525] dark:hover:bg-notion-hover-dark';
